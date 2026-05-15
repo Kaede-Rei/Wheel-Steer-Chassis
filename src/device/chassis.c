@@ -125,6 +125,7 @@ ChassisErrorCode chassis_task_500hz(void) {
 
         dji_motors[dji_index].target_rpm =
             chassis_wheel_omega_to_dji_rpm(s_chassis.kine.control.wheels[map->module].wheel_omega);
+        if(dji_index == 1 || dji_index == 2) dji_motors[dji_index].target_rpm = -dji_motors[dji_index].target_rpm; // 右侧电机反向
 
         DM_Motor_Set_Angle_Rad(map->dm_id, s_chassis.kine.control.wheels[map->module].steer_angle);
         DJI_Motor_Calc_PID(&dji_motors[dji_index]);

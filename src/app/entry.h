@@ -49,16 +49,16 @@ static inline void entry_init(void) {
     delay_ms(2000);
 
     if(chassis.init() != chassis.OK) Error_Handler();
-    delay_ms(100);
-    DM_Motor_Set_Angle_Rad(1, 1.0f);
-    delay_ms(100);
-    DM_Motor_Set_Angle_Rad(2, 1.0f);
-    delay_ms(100);
-    DM_Motor_Set_Angle_Rad(3, 1.0f);
-    delay_ms(100);
-    DM_Motor_Set_Angle_Rad(4, 1.0f);
-    delay_ms(100);
-    // chassis.set_velocity(0.0f, 0.0f, 3.14f);
+    // delay_ms(100);
+    // DM_Motor_Set_Angle_Rad(1, 1.0f);
+    // delay_ms(100);
+    // DM_Motor_Set_Angle_Rad(2, 1.0f);
+    // delay_ms(100);
+    // DM_Motor_Set_Angle_Rad(3, 1.0f);
+    // delay_ms(100);
+    // DM_Motor_Set_Angle_Rad(4, 1.0f);
+    // delay_ms(100);
+    chassis.set_velocity(0.1f, 0.1f, 0.5f);
 
     printf("System Init OK!\r\n");
 }
@@ -68,6 +68,7 @@ static inline void entry_loop(void) {
     static ms_t chassis_task = 0;
     if(delay_nb_ms(&led_task, 500)) led.toggle();
     // if(delay_nb_ms(&chassis_task, 2)) chassis.task_500hz();
+
 }
 
 #endif

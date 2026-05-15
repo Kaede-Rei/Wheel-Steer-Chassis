@@ -21,8 +21,8 @@
 #define CHASSIS_MODULE_TABLE \
     X(FL, 0, 1, 0) \
     X(FR, 1, 2, 1) \
-    X(RL, 2, 3, 2) \
-    X(RR, 3, 4, 3)
+    X(RR, 2, 3, 2) \
+    X(RL, 3, 4, 3)
 
 #define X(name, str) CHASSIS_##name,
 typedef enum {
