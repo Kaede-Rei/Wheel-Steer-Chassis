@@ -10,5 +10,5 @@ Drivers/
 .cproject
 .mxproject
 .project
-STM32F407VGTX_FLASH.ld
-STM32F407VGTX_RAM.ld
+STM32H723VGTX_FLASH.ld
+STM32H723VGTX_RAM.ld
