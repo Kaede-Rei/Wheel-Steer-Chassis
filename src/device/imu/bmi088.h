@@ -30,9 +30,14 @@ typedef enum {
 } Bmi088Error;
 
 /**
- * @brief BMI088 通用 IMU 实例
+ * @brief BMI088 IT + DMA IMU 实例
  */
 extern const ImuInterface bmi088_instance;
+
+/**
+ * @brief BMI088 阻塞式 IMU 实例
+ */
+extern const ImuInterface bmi088_blocking_instance;
 
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
 

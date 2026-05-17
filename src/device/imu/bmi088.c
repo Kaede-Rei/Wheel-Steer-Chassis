@@ -81,6 +81,7 @@ typedef enum {
 
 static ImuStatus bmi088_init_impl(void);
 static ImuStatus bmi088_update_impl(void);
+static ImuStatus bmi088_blocking_update_impl(void);
 static ImuAcc bmi088_get_acc_impl(void);
 static ImuGyro bmi088_get_gyro_impl(void);
 static ImuAngle bmi088_get_angle_impl(void);
@@ -101,6 +102,8 @@ static HAL_StatusTypeDef bmi088_spi_transmit_receive_dma(uint8_t* tx_data, uint8
 static Bmi088Error bmi088_device_init(void);
 static Bmi088Error bmi088_accel_init(void);
 static Bmi088Error bmi088_gyro_init(void);
+static void bmi088_read_gyro_raw(float gyro[3]);
+static void bmi088_read_accel_raw(float accel[3]);
 static void bmi088_read_temp_raw(float* temperature);
 static void bmi088_async_init(void);
 static void bmi088_notify_gyro_data_ready(void);
@@ -188,6 +191,18 @@ static bool s_bmi088_has_acc = false;
 const ImuInterface bmi088_instance = {
     .init = bmi088_init_impl,
     .update = bmi088_update_impl,
+    .get_acc = bmi088_get_acc_impl,
+    .get_gyro = bmi088_get_gyro_impl,
+    .get_angle = bmi088_get_angle_impl,
+    .status_str = bmi088_status_str_impl,
+};
+
+/**
+ * @brief BMI088 阻塞式 IMU 实例
+ */
+const ImuInterface bmi088_blocking_instance = {
+    .init = bmi088_init_impl,
+    .update = bmi088_blocking_update_impl,
     .get_acc = bmi088_get_acc_impl,
     .get_gyro = bmi088_get_gyro_impl,
     .get_angle = bmi088_get_angle_impl,
@@ -336,6 +351,40 @@ static ImuStatus bmi088_update_impl(void) {
 }
 
 /**
+ * @brief 以阻塞读取方式更新 BMI088 具体 IMU 实例缓存
+ */
+static ImuStatus bmi088_blocking_update_impl(void) {
+    float raw_acc[3] = { 0.0f };
+    float raw_gyro[3] = { 0.0f };
+    uint32_t now_tick = 0U;
+    float dt = 0.0f;
+
+    if(!s_bmi088_is_initialized) {
+        return IMU_STATUS_NOT_INITIALIZE;
+    }
+
+    bmi088_read_gyro_raw(raw_gyro);
+    bmi088_read_accel_raw(raw_acc);
+
+    now_tick = HAL_GetTick();
+    dt = (float)(now_tick - s_bmi088_last_update_tick) * 0.001f;
+
+    s_bmi088_gyro = bmi088_make_gyro(raw_gyro);
+    s_bmi088_acc = bmi088_make_acc(raw_acc);
+
+    if(s_bmi088_has_gyro) {
+        bmi088_update_angle_by_gyro(&s_bmi088_gyro, dt);
+    }
+
+    bmi088_update_angle_by_accel(&s_bmi088_acc);
+
+    s_bmi088_last_update_tick = now_tick;
+    s_bmi088_has_gyro = true;
+    s_bmi088_has_acc = true;
+    return IMU_STATUS_OK;
+}
+
+/**
  * @brief 获取 BMI088 最近一次缓存的加速度
  */
 static ImuAcc bmi088_get_acc_impl(void) {
@@ -467,6 +516,59 @@ static Bmi088Error bmi088_gyro_init(void) {
     }
 
     return BMI088_ERROR_NO_ERROR;
+}
+
+/**
+ * @brief 阻塞读取 BMI088 陀螺仪
+ */
+static void bmi088_read_gyro_raw(float gyro[3]) {
+    uint8_t buf[6] = { 0U };
+    int16_t raw_value = 0;
+
+    if(gyro == 0) {
+        return;
+    }
+
+    bmi088_gyro_cs_low();
+    bmi088_read_write_byte(BMI088_GYRO_X_L | 0x80U);
+
+    for(uint8_t i = 0U; i < sizeof(buf); i++) {
+        buf[i] = bmi088_read_write_byte(BMI088_SPI_DUMMY_BYTE);
+    }
+
+    bmi088_gyro_cs_high();
+
+    raw_value = (int16_t)(((uint16_t)buf[1] << 8) | buf[0]);
+    gyro[0] = raw_value * s_bmi088_gyro_sen;
+
+    raw_value = (int16_t)(((uint16_t)buf[3] << 8) | buf[2]);
+    gyro[1] = raw_value * s_bmi088_gyro_sen;
+
+    raw_value = (int16_t)(((uint16_t)buf[5] << 8) | buf[4]);
+    gyro[2] = raw_value * s_bmi088_gyro_sen;
+}
+
+/**
+ * @brief 阻塞读取 BMI088 加速度计
+ */
+static void bmi088_read_accel_raw(float accel[3]) {
+    uint8_t buf[6] = { 0U };
+    int16_t raw_value = 0;
+
+    if(accel == 0) {
+        return;
+    }
+
+    bmi088_accel_read_burst(BMI088_ACCEL_XOUT_L, buf, sizeof(buf));
+
+    raw_value = (int16_t)(((uint16_t)buf[1] << 8) | buf[0]);
+    accel[0] = raw_value * s_bmi088_accel_sen;
+
+    raw_value = (int16_t)(((uint16_t)buf[3] << 8) | buf[2]);
+    accel[1] = raw_value * s_bmi088_accel_sen;
+
+    raw_value = (int16_t)(((uint16_t)buf[5] << 8) | buf[4]);
+    accel[2] = raw_value * s_bmi088_accel_sen;
 }
 
 /**
