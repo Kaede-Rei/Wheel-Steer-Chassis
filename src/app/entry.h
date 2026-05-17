@@ -14,7 +14,8 @@
 #include "chassis.h"
 
 // ! device ! //
-#include "imu/BMI088/inc/BMI088driver.h"
+#include "imu/imu.h"
+#include "imu/bmi088.h"
 
 // ! domain ! //
 
@@ -33,8 +34,9 @@
 static ms_t log_task = 0;
 // static ms_t imu_task = 0;
 
-static float accel[3] = { 0.0f };
-static float gyro[3] = { 0.0f };
+static ImuAcc accel = { 0.0f, 0.0f, 0.0f };
+static ImuGyro gyro = { 0.0f, 0.0f, 0.0f };
+static ImuAngle angle = { 0.0f, 0.0f, 0.0f };
 static float temp = 0.0f;
 
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
@@ -44,7 +46,7 @@ static float temp = 0.0f;
  */
 static inline void entry_init(void) {
     assemble_init();
-    chassis.set_velocity(0.0f, 0.0f, 1.0f);
+    chassis.set_velocity(0.0f, 0.0f, 0.0f);
 }
 
 /**
@@ -57,16 +59,19 @@ static inline void entry_loop(void) {
         chassis.process();
     }
 
-    BMI088_async_poll();
-    BMI088_async_get_accel(accel);
-    BMI088_async_get_gyro(gyro);
+    imu_update();
+    accel = imu_get_acc();
+    gyro = imu_get_gyro();
+    angle = imu_get_angle();
 
     // ! 周 期 性 任 务 ! //
     if(delay_nb_ms(&log_task, 1000)) {
         SteerWheelState state = *chassis.get_state();
 
-        BMI088_read_temp(&temp);
-        log_vofa(state.cur_vx, state.cur_vy, state.cur_wz, gyro[0], gyro[1], gyro[2], temp);
+        temp = bmi088_get_temp();
+        log_vofa(state.cur_vx, state.cur_vy, state.cur_wz,
+            gyro.x, gyro.y, gyro.z, temp,
+            angle.roll, angle.pitch, angle.yaw);
     }
 }
 

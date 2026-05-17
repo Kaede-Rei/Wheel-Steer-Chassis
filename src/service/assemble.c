@@ -9,7 +9,8 @@
 // ! device ! //
 #include "rgb_led/rgb_led.h"
 #include "rgb_led/ws2812_rgb_led.h"
-#include "imu/BMI088/inc/BMI088driver.h"
+#include "imu/imu.h"
+#include "imu/bmi088.h"
 
 // ! infra ! //
 #include "delay.h"
@@ -75,17 +76,22 @@ static void assemble_log(void) {
 }
 
 static void assemble_imu(void) {
-    uint8_t res = BMI088_init();
+    ImuStatus status = IMU_STATUS_OK;
 
-    if(res != BMI088_NO_ERROR) {
-        log_error("BMI088 initialization failed: %d", res);
+    assert(imu_set_instance(&bmi088_instance) == IMU_STATUS_OK);
+
+    status = imu_init();
+    if(status != IMU_STATUS_OK) {
+        log_error(
+            "BMI088 initialization failed: %s (%s)",
+            imu_status_str(status),
+            bmi088_error_str(bmi088_get_init_error()));
     }
 
-    BMI088_async_init();
-    exti_register_callback(ACC_INT_Pin, BMI088_EXTI_Callback);
-    exti_register_callback(GYRO_INT_Pin, BMI088_EXTI_Callback);
-    spi_register_txrx_complete_callback(&hspi2, BMI088_SPI_TxRxCpltCallback);
-    spi_register_error_callback(&hspi2, BMI088_SPI_ErrorCallback);
+    exti_register_callback(ACC_INT_Pin, bmi088_exti_callback);
+    exti_register_callback(GYRO_INT_Pin, bmi088_exti_callback);
+    spi_register_txrx_complete_callback(&hspi2, bmi088_spi_txrx_cplt_callback);
+    spi_register_error_callback(&hspi2, bmi088_spi_error_callback);
 }
 
 static void assemble_rgb_led(void) {
