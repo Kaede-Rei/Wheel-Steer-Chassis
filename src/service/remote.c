@@ -58,9 +58,15 @@
 /**
  * @brief 遥控映射到的最大平移/旋转速度
  */
-#define REMOTE_MAX_VX_MPS   2.0f
-#define REMOTE_MAX_VY_MPS   2.0f
-#define REMOTE_MAX_WZ_RAD_S 8.0f
+#define REMOTE_FAST_MAX_VX_MPS   2.0f
+#define REMOTE_FAST_MAX_VY_MPS   2.0f
+#define REMOTE_FAST_MAX_WZ_RAD_S 8.0f
+#define REMOTE_MID_MAX_VX_MPS    1.0f
+#define REMOTE_MID_MAX_VY_MPS    1.0f
+#define REMOTE_MID_MAX_WZ_RAD_S  4.0f
+#define REMOTE_SLOW_MAX_VX_MPS   0.5f
+#define REMOTE_SLOW_MAX_VY_MPS   0.5f
+#define REMOTE_SLOW_MAX_WZ_RAD_S 2.0f
 
 /**
  * @brief VR 通道下拨与上拨阈值，单位为原始通道值
@@ -73,6 +79,13 @@
  */
 #define REMOTE_SW_LOW 2000u
 #define REMOTE_SW_HIGH 1000u
+#define REMOTE_SW_SELECT_TOLERANCE 250u
+
+typedef struct {
+    float max_vx;
+    float max_vy;
+    float max_wz;
+} RemoteSpeedLimit;
 
 /**
  * @brief 遥控服务最近一次输出的控制指令
@@ -88,6 +101,7 @@ static RemoteCommand s_command = { 0 };
  * @return float 归一化结果
  */
 static float remote_channel_to_norm(uint16_t value, uint16_t deadband);
+static RemoteSpeedLimit remote_get_speed_limit(uint16_t swb);
 
 // ! ========================= 接 口 函 数 实 现 ========================= ! //
 
@@ -103,6 +117,7 @@ void remote_init(void) {
  */
 void remote_process(void) {
     FsIa10bData rc_data;
+    RemoteSpeedLimit speed_limit;
 
     if(!ibus_get_data(&rc_data) || !ibus_is_online(REMOTE_TIMEOUT_MS)) {
         s_command.vx = 0.0f;
@@ -123,9 +138,10 @@ void remote_process(void) {
     }
 
     if(rc_data.channel[REMOTE_CH_VRB] <= REMOTE_VR_LOW_THRESHOLD) {
-        s_command.vx = remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_Y], REMOTE_DEADBAND) * REMOTE_MAX_VX_MPS;
-        s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * REMOTE_MAX_VY_MPS;
-        s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * REMOTE_MAX_WZ_RAD_S;
+        speed_limit = remote_get_speed_limit(rc_data.channel[REMOTE_CH_SWB]);
+        s_command.vx = remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_Y], REMOTE_DEADBAND) * speed_limit.max_vx;
+        s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * speed_limit.max_vy;
+        s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * speed_limit.max_wz;
         s_command.online = true;
         (void)chassis.set_velocity(s_command.vx, s_command.vy, s_command.wz);
     }
@@ -181,4 +197,26 @@ static float remote_channel_to_norm(uint16_t value, uint16_t deadband) {
     }
 
     return normalized;
+}
+
+static RemoteSpeedLimit remote_get_speed_limit(uint16_t swb) {
+    RemoteSpeedLimit limit;
+
+    if(swb >= (REMOTE_SW_LOW - REMOTE_SW_SELECT_TOLERANCE)) {
+        limit.max_vx = REMOTE_FAST_MAX_VX_MPS;
+        limit.max_vy = REMOTE_FAST_MAX_VY_MPS;
+        limit.max_wz = REMOTE_FAST_MAX_WZ_RAD_S;
+    }
+    else if(swb <= (REMOTE_SW_HIGH + REMOTE_SW_SELECT_TOLERANCE)) {
+        limit.max_vx = REMOTE_SLOW_MAX_VX_MPS;
+        limit.max_vy = REMOTE_SLOW_MAX_VY_MPS;
+        limit.max_wz = REMOTE_SLOW_MAX_WZ_RAD_S;
+    }
+    else {
+        limit.max_vx = REMOTE_MID_MAX_VX_MPS;
+        limit.max_vy = REMOTE_MID_MAX_VY_MPS;
+        limit.max_wz = REMOTE_MID_MAX_WZ_RAD_S;
+    }
+
+    return limit;
 }
