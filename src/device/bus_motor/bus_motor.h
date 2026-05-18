@@ -176,6 +176,14 @@ typedef struct {
      */
     BusMotorStatus(*set_spd)(uint16_t id, float speed);
     /**
+     * @brief 设定目标位置和速度
+     * @param id 电机 ID
+     * @param position 目标位置, 单位 rad
+     * @param speed 目标速度, 单位 rad/s
+     * @return 状态码
+     */
+    BusMotorStatus(*set_pos_vel)(uint16_t id, float position, float speed);
+    /**
      * @brief 设定目标扭矩或等效前馈
      * @param id 电机 ID
      * @param torque 目标扭矩, 单位 N*m
@@ -245,6 +253,7 @@ BusMotorStatus bus_motor_disable(uint16_t id);
 BusMotorStatus bus_motor_switch_mode(uint16_t id, BusMotorMode mode);
 BusMotorStatus bus_motor_set_pos(uint16_t id, float position);
 BusMotorStatus bus_motor_set_spd(uint16_t id, float speed);
+BusMotorStatus bus_motor_set_pos_vel(uint16_t id, float position, float speed);
 BusMotorStatus bus_motor_set_tor(uint16_t id, float torque);
 BusMotorStatus bus_motor_set_pd(uint16_t id, float kp, float kd);
 BusMotorStatus bus_motor_update_feedback(uint16_t id, BusMotorFeedback* feedback);

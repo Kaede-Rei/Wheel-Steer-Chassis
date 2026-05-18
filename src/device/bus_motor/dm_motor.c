@@ -43,6 +43,7 @@ static BusMotorStatus dm_motor_disable(uint16_t id);
 static BusMotorStatus dm_motor_switch_mode(uint16_t id, BusMotorMode mode);
 static BusMotorStatus dm_motor_set_pos(uint16_t id, float position);
 static BusMotorStatus dm_motor_set_spd(uint16_t id, float speed);
+static BusMotorStatus dm_motor_set_pos_vel(uint16_t id, float position, float speed);
 static BusMotorStatus dm_motor_set_tor(uint16_t id, float torque);
 static BusMotorStatus dm_motor_set_pd(uint16_t id, float kp, float kd);
 static BusMotorStatus dm_motor_update_feedback(uint16_t id, BusMotorFeedback* feedback);
@@ -76,6 +77,7 @@ const BusMotorInterface dm_motor_instance = {
     .switch_mode = dm_motor_switch_mode,
     .set_pos = dm_motor_set_pos,
     .set_spd = dm_motor_set_spd,
+    .set_pos_vel = dm_motor_set_pos_vel,
     .set_tor = dm_motor_set_tor,
     .set_pd = dm_motor_set_pd,
     .update_feedback = dm_motor_update_feedback,
@@ -206,6 +208,21 @@ static BusMotorStatus dm_motor_set_spd(uint16_t id, float speed) {
         return MOTOR_STATUS_INVALID_PARAM;
     }
 
+    slot->speed = speed;
+    return dm_motor_apply_command(id);
+}
+
+/**
+ * @brief 设定目标位置和速度
+ */
+static BusMotorStatus dm_motor_set_pos_vel(uint16_t id, float position, float speed) {
+    DmMotorSlot* slot = dm_motor_get_slot(id);
+
+    if(slot == 0) {
+        return MOTOR_STATUS_INVALID_PARAM;
+    }
+
+    slot->position = position;
     slot->speed = speed;
     return dm_motor_apply_command(id);
 }

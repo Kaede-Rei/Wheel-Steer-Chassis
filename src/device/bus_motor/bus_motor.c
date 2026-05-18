@@ -116,6 +116,17 @@ BusMotorStatus bus_motor_set_spd(uint16_t id, float speed) {
 }
 
 /**
+ * @brief 设定目标位置和速度
+ */
+BusMotorStatus bus_motor_set_pos_vel(uint16_t id, float position, float speed) {
+    if(bus_motor_instance == 0 || bus_motor_instance->set_pos_vel == 0) {
+        return MOTOR_STATUS_NO_INSTANCE;
+    }
+
+    return bus_motor_instance->set_pos_vel(id, position, speed);
+}
+
+/**
  * @brief 设定目标扭矩或等效前馈
  */
 BusMotorStatus bus_motor_set_tor(uint16_t id, float torque) {

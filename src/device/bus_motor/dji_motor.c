@@ -60,6 +60,7 @@ static BusMotorStatus dji_motor_disable(uint16_t id);
 static BusMotorStatus dji_motor_switch_mode(uint16_t id, BusMotorMode mode);
 static BusMotorStatus dji_motor_set_pos(uint16_t id, float position);
 static BusMotorStatus dji_motor_set_spd(uint16_t id, float speed);
+static BusMotorStatus dji_motor_set_pos_vel(uint16_t id, float position, float speed);
 static BusMotorStatus dji_motor_set_tor(uint16_t id, float torque);
 static BusMotorStatus dji_motor_set_pd(uint16_t id, float kp, float kd);
 static BusMotorStatus dji_motor_update_feedback(uint16_t id, BusMotorFeedback* feedback);
@@ -87,6 +88,7 @@ const BusMotorInterface dji_motor_instance = {
     .switch_mode = dji_motor_switch_mode,
     .set_pos = dji_motor_set_pos,
     .set_spd = dji_motor_set_spd,
+    .set_pos_vel = dji_motor_set_pos_vel,
     .set_tor = dji_motor_set_tor,
     .set_pd = dji_motor_set_pd,
     .update_feedback = dji_motor_update_feedback,
@@ -203,6 +205,16 @@ static BusMotorStatus dji_motor_set_spd(uint16_t id, float speed) {
     slot->target_speed = speed;
     dji_motor_update_pid(slot);
     return dji_motor_send_all_current();
+}
+
+/**
+ * @brief DJI 3508 不直接支持位置和速度的复合控制入口
+ */
+static BusMotorStatus dji_motor_set_pos_vel(uint16_t id, float position, float speed) {
+    (void)id;
+    (void)position;
+    (void)speed;
+    return MOTOR_STATUS_UNSUPPORTED;
 }
 
 /**
