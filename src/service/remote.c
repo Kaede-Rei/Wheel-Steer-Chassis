@@ -129,7 +129,10 @@ void remote_process(void) {
         s_command.online = true;
         (void)chassis.set_velocity(s_command.vx, s_command.vy, s_command.wz);
     }
-
+    else {
+        s_command.online = true;
+        (void)chassis.set_velocity(0.0f, 0.0f, 0.0f);
+    }
 }
 
 /**
