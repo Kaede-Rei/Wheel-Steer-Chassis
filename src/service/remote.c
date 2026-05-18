@@ -63,9 +63,16 @@
 #define REMOTE_MAX_WZ_RAD_S 6.0f
 
 /**
- * @brief VRA 通道进入驻车刹车的阈值
+ * @brief VR 通道下拨与上拨阈值，单位为原始通道值
  */
-#define REMOTE_BRAKE_THRESHOLD 1200u
+#define REMOTE_VR_LOW_THRESHOLD 1200u
+#define REMOTE_VR_HIGH_THRESHOLD 1800u
+
+/**
+ * @brief SW 通道下拨与上拨数值，单位为原始通道值
+ */
+#define REMOTE_SW_LOW 2000u
+#define REMOTE_SW_HIGH 1000u
 
 /**
  * @brief 遥控服务最近一次输出的控制指令
@@ -106,7 +113,7 @@ void remote_process(void) {
         return;
     }
 
-    if(rc_data.channel[REMOTE_CH_VRA] <= REMOTE_BRAKE_THRESHOLD) {
+    if(rc_data.channel[REMOTE_CH_SWA] == REMOTE_SW_LOW || rc_data.channel[REMOTE_CH_VRA] <= REMOTE_VR_LOW_THRESHOLD) {
         s_command.vx = 0.0f;
         s_command.vy = 0.0f;
         s_command.wz = 0.0f;
@@ -115,12 +122,14 @@ void remote_process(void) {
         return;
     }
 
-    s_command.vx = remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_Y], REMOTE_DEADBAND) * REMOTE_MAX_VX_MPS;
-    s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * REMOTE_MAX_VY_MPS;
-    s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * REMOTE_MAX_WZ_RAD_S;
-    s_command.online = true;
+    if(rc_data.channel[REMOTE_CH_VRB] <= REMOTE_VR_LOW_THRESHOLD) {
+        s_command.vx = remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_Y], REMOTE_DEADBAND) * REMOTE_MAX_VX_MPS;
+        s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * REMOTE_MAX_VY_MPS;
+        s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * REMOTE_MAX_WZ_RAD_S;
+        s_command.online = true;
+        (void)chassis.set_velocity(s_command.vx, s_command.vy, s_command.wz);
+    }
 
-    (void)chassis.set_velocity(s_command.vx, s_command.vy, s_command.wz);
 }
 
 /**

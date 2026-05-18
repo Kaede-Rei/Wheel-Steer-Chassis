@@ -16,14 +16,14 @@
 
 // ! device ! //
 #include "imu/imu.h"
-
+#include "fs_ia10b.h"
 
 // ! domain ! //
 
 
 
 // ! infra ! //
-// #include "log.h"
+#include "log.h"
 #include "delay.h"
 
 // ! platform ! //
@@ -33,7 +33,6 @@
 // ! ========================= 接口变量 / Typedef 声明 ========================= ! //
 
 static ms_t log_task = 0;
-// static ms_t imu_task = 0;
 
 static ImuAcc accel = { 0.0f, 0.0f, 0.0f };
 static ImuGyro gyro = { 0.0f, 0.0f, 0.0f };
@@ -74,7 +73,11 @@ static inline void entry_loop(void) {
 
     // ! 周期性任务 ! //
     if(delay_nb_ms(&log_task, 1000)) {
-
+        log_info("CH5=%d, CH6=%d, CH7=%d, CH8=%d",
+            ibus_get_channel(4),
+            ibus_get_channel(5),
+            ibus_get_channel(6),
+            ibus_get_channel(7));
     }
 }
 
