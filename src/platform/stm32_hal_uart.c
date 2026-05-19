@@ -3,19 +3,31 @@
 // ! ========================= 变 量 声 明 ========================= ! //
 
 /**
- * @brief USART1 发送完成回调函数
+ * @brief USART1 发送完成回调函数指针
+ *
+ * 日志模块使用 USART1 DMA 异步发送；
+ * 发送完成后通过该指针通知日志队列继续输出
  */
 static void(*uart_tx_complete_callback)(void) = NULL;
 /**
- * @brief UART5 接收完成回调函数
+ * @brief UART5 接收完成回调函数指针
+ *
+ * 普通中断接收完成时触发；
+ * 当前 i.BUS 主要使用空闲行接收事件
  */
 static void(*uart_rx_complete_callback)(void) = NULL;
 /**
- * @brief UART5 接收事件回调函数，参数为本次接收的数据长度
+ * @brief UART5 接收事件回调函数指针
+ *
+ * ReceiveToIdle DMA 收到数据或空闲行时触发；
+ * 参数表示本次接收的数据长度
  */
 static void(*uart_rx_event_callback)(uint16_t size) = NULL;
 /**
- * @brief UART5 错误回调函数
+ * @brief UART5 错误回调函数指针
+ *
+ * UART 发生帧错误、噪声错误或溢出时触发；
+ * i.BUS 驱动会借此重启接收
  */
 static void(*uart_error_callback)(void) = NULL;
 
@@ -66,8 +78,23 @@ bool uart_receive_to_idle_dma(UART_HandleTypeDef* huart, uint8_t* data, uint16_t
         return false;
     }
 
+    __HAL_UART_CLEAR_PEFLAG(huart);
+    __HAL_UART_CLEAR_FEFLAG(huart);
+    __HAL_UART_CLEAR_NEFLAG(huart);
+    __HAL_UART_CLEAR_OREFLAG(huart);
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
+
     if(HAL_UARTEx_ReceiveToIdle_DMA(huart, data, len) != HAL_OK) {
-        return false;
+        (void)HAL_UART_AbortReceive(huart);
+        __HAL_UART_CLEAR_PEFLAG(huart);
+        __HAL_UART_CLEAR_FEFLAG(huart);
+        __HAL_UART_CLEAR_NEFLAG(huart);
+        __HAL_UART_CLEAR_OREFLAG(huart);
+        __HAL_UART_CLEAR_IDLEFLAG(huart);
+
+        if(HAL_UARTEx_ReceiveToIdle_DMA(huart, data, len) != HAL_OK) {
+            return false;
+        }
     }
 
     if(huart->hdmarx != NULL) {

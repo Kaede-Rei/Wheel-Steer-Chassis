@@ -91,7 +91,12 @@ typedef struct {
     ChassisConfig config;
     uint8_t brake_requested;
     uint8_t brake_latched;
-    /** @brief Whether all steer motors have valid feedback after power-on */
+    /**
+     * @brief 转向电机反馈就绪标志
+     *
+     * 四个转向电机均收到有效反馈后置位；
+     * 主循环可据此判断冷启动是否完成
+     */
     uint8_t steer_ready;
     uint8_t initialized;
 } Chassis;
@@ -148,9 +153,13 @@ extern const struct ChassisInterface {
      */
     ChassisErrorCode(*brake)(void);
     /**
-     * @brief Check whether chassis cold-start is ready for normal control
-     * @return true All steer motors have valid feedback
-     * @return false Chassis is still waiting for steer motor feedback
+     * @brief 判断底盘冷启动是否已经就绪
+     *
+     * 该状态只表示转向电机反馈已经正常；
+     * 上层若要整机可遥控，还需要同时检查遥控链路
+     *
+     * @return true 底盘转向反馈已就绪
+     * @return false 底盘仍在等待转向反馈
      */
     bool (*is_ready)(void);
     /**
@@ -220,9 +229,13 @@ ChassisErrorCode chassis_stop(void);
 ChassisErrorCode chassis_brake(void);
 
 /**
- * @brief Check whether chassis cold-start is ready for normal control
- * @return true All steer motors have valid feedback
- * @return false Chassis is still waiting for steer motor feedback
+ * @brief 判断底盘冷启动是否已经就绪
+ *
+ * 该函数用于 RGB 指示和上层状态判断；
+ * 不会触发新的控制动作
+ *
+ * @return true 底盘转向反馈已就绪
+ * @return false 底盘仍在等待转向反馈
  */
 bool chassis_is_ready(void);
 
