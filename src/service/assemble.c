@@ -34,7 +34,7 @@
  * 接收机、电机和电源轨在刚上电时需要先稳定一段时间；
  * 该延时集中放在装配初始化入口，避免各模块里散落过多等待
  */
-#define ASSEMBLE_BOOT_SETTLE_DELAY_MS 1500u
+#define ASSEMBLE_BOOT_SETTLE_DELAY_MS 2000u
 
 /**
  * @brief WS2812 RGB 灯的颜色缓存
