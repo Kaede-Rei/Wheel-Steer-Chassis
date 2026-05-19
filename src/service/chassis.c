@@ -26,105 +26,105 @@
  * 当前机械结构按一比一处理；
  * 若后续更换传动结构，可通过配置覆盖
  */
-#define CHASSIS_DEFAULT_WHEEL_DRIVE_RATIO 1.0f
+#define CHASSIS_DEFAULT_WHEEL_DRIVE_RATIO       1.0f
 /**
  * @brief 转向电机 S 曲线规划后的最大跟踪速度
  *
  * 单位为 rad/s；
  * 该值越大转向越快，但也更容易引入抖动
  */
-#define CHASSIS_STEER_TRACK_MAX_SPEED_RAD_S   9.42f
+#define CHASSIS_STEER_TRACK_MAX_SPEED_RAD_S     12.56f
 /**
  * @brief 转向电机 S 曲线规划使用的最低跟踪速度
  *
  * 单位为 rad/s；
  * 用于避免速度过低导致转向响应迟滞
  */
-#define CHASSIS_STEER_TRACK_MIN_SPEED_RAD_S     4.71f
+#define CHASSIS_STEER_TRACK_MIN_SPEED_RAD_S     1.57f
 /**
  * @brief 转向跟踪速度从最低值爬升到最高值的时间
  *
  * 单位为秒；
  * 该时间决定 S 曲线加速段的柔和程度
  */
-#define CHASSIS_STEER_SPEED_RAMP_TIME_S   0.20f
+#define CHASSIS_STEER_SPEED_RAMP_TIME_S         0.1f
 /**
  * @brief 转向接近目标角时开始降速的角度窗口
  *
  * 单位为 rad；
  * 误差进入该窗口后速度会平滑降低
  */
-#define CHASSIS_STEER_SLOWDOWN_ANGLE_RAD  0.628f
+#define CHASSIS_STEER_SLOWDOWN_ANGLE_RAD        0.628f
 /**
  * @brief 底盘控制任务周期
  *
  * 单位为秒；
  * 需与 TIM6 触发周期保持一致
  */
-#define CHASSIS_CONTROL_PERIOD_S          0.002f
+#define CHASSIS_CONTROL_PERIOD_S                0.002f
 /**
  * @brief 判定转向目标明显变化的角度阈值
  *
  * 单位为 rad；
- * 超过该阈值会重新启动 S 曲线速度规划
+ * 超过该阈值会启动 S 曲线速度规划
  */
-#define CHASSIS_STEER_TARGET_CHANGE_RAD   0.03f
+#define CHASSIS_STEER_TARGET_CHANGE_RAD         0.0628f
 /**
  * @brief 允许驱动电机出力的转向角误差阈值
  *
  * 单位为 rad；
  * 未进入该误差范围前，驱动速度会被置零以防漂移
  */
-#define CHASSIS_DRIVE_ANGLE_TOL_RAD       0.1f
+#define CHASSIS_DRIVE_ANGLE_TOL_RAD             0.0628f
 /**
  * @brief 驻车刹车流程使用的转向到位误差阈值
  *
  * 单位为 rad；
  * 转向角到位后才会进入电机抱死状态
  */
-#define CHASSIS_BRAKE_ANGLE_TOL_RAD       0.1f
+#define CHASSIS_BRAKE_ANGLE_TOL_RAD             0.0628f
 /**
  * @brief 圆周率常量
  *
  * 用于角度归一化和等效角计算；
  * 保持 float 精度即可满足底盘控制需求
  */
-#define CHASSIS_PI                        3.14159265358979323846f
+#define CHASSIS_PI                              3.14159265358979323846f
 /**
  * @brief 转向角完整周期
  *
  * 单位为 rad；
  * 用于选择离当前位置最近的等效转向角
  */
-#define CHASSIS_2PI                       (2.0f * CHASSIS_PI)
+#define CHASSIS_2PI                             (2.0f * CHASSIS_PI)
 /**
  * @brief 转向电机位置命令的安全绝对边界
  *
  * 单位为 rad；
  * 目标角会被限制在该范围内
  */
-#define CHASSIS_STEER_POS_LIMIT_RAD       12.4f
+#define CHASSIS_STEER_POS_LIMIT_RAD             12.4f
 /**
  * @brief 等效转向角切换滞回
  *
  * 单位为 rad；
  * 用于避免目标角在两个等效解之间来回跳变
  */
-#define CHASSIS_EQUIV_ANGLE_HYST_RAD      0.12f
+#define CHASSIS_EQUIV_ANGLE_HYST_RAD            0.12f
 /**
  * @brief 驱动方向等效优化的滞回角
  *
  * 单位为 rad；
  * 用于避免前进/后退等效解在临界角附近抖动
  */
-#define CHASSIS_DRIVE_EQUIV_HYST_RAD      0.03f
+#define CHASSIS_DRIVE_EQUIV_HYST_RAD            0.03f
 /**
  * @brief 转向电机使能重试间隔
  *
  * 单位为底盘控制周期；
  * 冷启动未收到反馈时会按该间隔重新发送使能序列
  */
-#define CHASSIS_STEER_ENABLE_RETRY_CYCLES 250u
+#define CHASSIS_STEER_ENABLE_RETRY_CYCLES       250u
 
 /**
  * @brief 逻辑舵轮模块到物理 CAN 电机的映射关系
