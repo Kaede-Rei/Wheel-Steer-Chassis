@@ -75,7 +75,7 @@
  * @brief 日志异步输出队列深度
  */
 #ifndef LOG_QUEUE_DEPTH
-#define LOG_QUEUE_DEPTH 4u
+#define LOG_QUEUE_DEPTH 16u
 #endif
 
 /**
