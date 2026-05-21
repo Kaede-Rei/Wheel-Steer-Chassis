@@ -170,8 +170,8 @@ const char* steer_wheel_error_code_to_str(SteelWheelErrorCode status) {
 /**
  * @brief 根据底盘模型计算四个轮模块相对底盘中心的位置
  * @param model 底盘模型参数
- * @param x 输出四个轮模块 x 坐标，单位 m，顺序为 FL、FR、RL、RR
- * @param y 输出四个轮模块 y 坐标，单位 m，顺序为 FL、FR、RL、RR
+ * @param x 输出四个轮模块 x 坐标，单位 m，顺序为 FL、FR、RR、RL
+ * @param y 输出四个轮模块 y 坐标，单位 m，顺序为 FL、FR、RR、RL
  */
 static void sw_get_wheel_pos(const SteerWheelModel* model, float x[4], float y[4]) {
     const float hx = model->length * 0.5f;
