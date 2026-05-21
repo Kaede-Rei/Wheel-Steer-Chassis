@@ -36,7 +36,7 @@ typedef enum {
 /**
  * @brief 单个舵轮模块输出或反馈
  * @param wheel_omega 车轮角速度，单位 rad/s
- * @param steer_angle 舵向角，单位 rad
+ * @param steer_angle 舵向角，单位 rad，范围 (-pi, pi]
  */
 typedef struct {
     float wheel_omega;
