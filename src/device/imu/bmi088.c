@@ -75,6 +75,11 @@ typedef enum {
     BMI088_DMA_ACCEL
 } Bmi088DmaState;
 
+typedef enum {
+    BMI088_ASYNC_NEXT_GYRO = 0,
+    BMI088_ASYNC_NEXT_ACCEL
+} Bmi088AsyncNext;
+
 // ! ========================= 私 有 函 数 声 明 ========================= ! //
 
 static ImuStatus bmi088_init_async(const void* config);
@@ -187,6 +192,7 @@ static uint32_t s_bmi088_last_update_tick = 0U;
 static bool s_bmi088_is_initialized = false;
 static bool s_bmi088_has_gyro = false;
 static bool s_bmi088_has_acc = false;
+static volatile Bmi088AsyncNext s_bmi088_async_next = BMI088_ASYNC_NEXT_GYRO;
 
 /**
  * @brief BMI088 通用 IMU 实例
@@ -636,6 +642,7 @@ static void bmi088_read_temp_raw(float* temperature) {
  */
 static void bmi088_async_init(void) {
     s_bmi088_dma_state = BMI088_DMA_IDLE;
+    s_bmi088_async_next = BMI088_ASYNC_NEXT_GYRO;
     s_bmi088_gyro_pending = 0U;
     s_bmi088_accel_pending = 0U;
     s_bmi088_gyro_ready = 0U;
@@ -665,28 +672,55 @@ static void bmi088_notify_accel_data_ready(void) {
  * @brief 轮询并启动 BMI088 DMA 读取
  */
 static bool bmi088_async_poll(void) {
+    bool prefer_gyro = false;
+
     if(s_bmi088_dma_state != BMI088_DMA_IDLE) {
         return false;
     }
 
-    if(s_bmi088_gyro_pending != 0U) {
-        s_bmi088_gyro_pending = 0U;
-        if(bmi088_start_gyro_dma()) {
-            return true;
+    prefer_gyro = (s_bmi088_async_next == BMI088_ASYNC_NEXT_GYRO);
+
+    if(prefer_gyro) {
+        if(s_bmi088_gyro_pending != 0U) {
+            s_bmi088_gyro_pending = 0U;
+            if(bmi088_start_gyro_dma()) {
+                s_bmi088_async_next = BMI088_ASYNC_NEXT_ACCEL;
+                return true;
+            }
+
+            s_bmi088_gyro_pending = 1U;
         }
 
-        s_bmi088_gyro_pending = 1U;
-        return false;
+        if(s_bmi088_accel_pending != 0U) {
+            s_bmi088_accel_pending = 0U;
+            if(bmi088_start_accel_dma()) {
+                s_bmi088_async_next = BMI088_ASYNC_NEXT_GYRO;
+                return true;
+            }
+
+            s_bmi088_accel_pending = 1U;
+        }
     }
+    else {
+        if(s_bmi088_accel_pending != 0U) {
+            s_bmi088_accel_pending = 0U;
+            if(bmi088_start_accel_dma()) {
+                s_bmi088_async_next = BMI088_ASYNC_NEXT_GYRO;
+                return true;
+            }
 
-    if(s_bmi088_accel_pending != 0U) {
-        s_bmi088_accel_pending = 0U;
-        if(bmi088_start_accel_dma()) {
-            return true;
+            s_bmi088_accel_pending = 1U;
         }
 
-        s_bmi088_accel_pending = 1U;
-        return false;
+        if(s_bmi088_gyro_pending != 0U) {
+            s_bmi088_gyro_pending = 0U;
+            if(bmi088_start_gyro_dma()) {
+                s_bmi088_async_next = BMI088_ASYNC_NEXT_ACCEL;
+                return true;
+            }
+
+            s_bmi088_gyro_pending = 1U;
+        }
     }
 
     return false;
