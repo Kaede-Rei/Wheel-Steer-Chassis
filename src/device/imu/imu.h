@@ -162,9 +162,6 @@ ImuAcc imu_get_acc(void);
 ImuGyro imu_get_gyro(void);
 ImuAngle imu_get_angle(void);
 ImuStatus imu_get_sample(ImuSample* sample);
-ImuStatus imu_attitude_enable(const ImuAttitudeConfig* config);
-ImuStatus imu_attitude_disable(void);
-ImuStatus imu_reset_yaw(float yaw);
 const char* imu_status_str(ImuStatus status);
 
 #endif

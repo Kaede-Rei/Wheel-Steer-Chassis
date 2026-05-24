@@ -50,6 +50,7 @@ typedef struct {
     float gyro_sen;
     uint16_t accel_int_pin;
     uint16_t gyro_int_pin;
+    ImuAttitudeConfig attitude;
 } Bmi088Config;
 
 /**

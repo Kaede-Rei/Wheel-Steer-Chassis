@@ -1,4 +1,5 @@
 #include "bmi088.h"
+#include "imu_attitude.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -102,6 +103,8 @@ static bool bmi088_spi_transmit_receive_dma(uint8_t* tx_data, uint8_t* rx_data, 
 static uint32_t bmi088_now_ms(void);
 static uint32_t bmi088_now_us(void);
 static bool bmi088_config_is_valid(const Bmi088Config* config, bool require_async_ops);
+static void bmi088_attitude_init(const ImuAttitudeConfig* config);
+static void bmi088_attitude_update(void);
 
 static Bmi088Error bmi088_device_init(void);
 static Bmi088Error bmi088_accel_init(void);
@@ -178,7 +181,11 @@ static const uint8_t s_bmi088_gyro_reg_init[BMI088_WRITE_GYRO_REG_NUM][3] = {
 
 static ImuAcc s_bmi088_acc = { 0.0f, 0.0f, 0.0f };
 static ImuGyro s_bmi088_gyro = { 0.0f, 0.0f, 0.0f };
+static ImuAngle s_bmi088_angle = { 0.0f, 0.0f, 0.0f };
 static ImuSample s_bmi088_sample = { 0 };
+static ImuAttitude s_bmi088_attitude = { 0 };
+static bool s_bmi088_attitude_enabled = false;
+static bool s_bmi088_has_acc = false;
 
 static Bmi088Error s_bmi088_init_error = BMI088_ERROR_NO_ERROR;
 static float s_bmi088_temp = 0.0f;
@@ -221,6 +228,15 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->gyro_sen = BMI088_GYRO_2000_SEN;
     config->accel_int_pin = accel_int_pin;
     config->gyro_int_pin = gyro_int_pin;
+    config->attitude.mode = IMU_ATTITUDE_MAHONY_6AXIS;
+    config->attitude.now_us = 0;
+    config->attitude.gyro_calib_samples = 100U;
+    config->attitude.acc_norm = 9.80665f;
+    config->attitude.acc_norm_tolerance = 2.5f;
+    config->attitude.complementary_tau = 0.5f;
+    config->attitude.mahony_kp = 2.0f;
+    config->attitude.mahony_ki = 0.0f;
+    config->attitude.mahony_ki_z = 0.0f;
     return IMU_STATUS_OK;
 }
 
@@ -336,7 +352,9 @@ static ImuStatus bmi088_init_common(const void* config, bool require_async_ops) 
 
     s_bmi088_acc = (ImuAcc){ 0.0f, 0.0f, 0.0f };
     s_bmi088_gyro = (ImuGyro){ 0.0f, 0.0f, 0.0f };
+    s_bmi088_angle = (ImuAngle){ 0.0f, 0.0f, 0.0f };
     s_bmi088_sample = (ImuSample){ 0 };
+    s_bmi088_has_acc = false;
     s_bmi088_temp = 0.0f;
     s_bmi088_is_initialized = (s_bmi088_init_error == BMI088_ERROR_NO_ERROR);
 
@@ -344,6 +362,7 @@ static ImuStatus bmi088_init_common(const void* config, bool require_async_ops) 
         return IMU_STATUS_ERROR;
     }
 
+    bmi088_attitude_init(&bmi088_config->attitude);
     return IMU_STATUS_OK;
 }
 
@@ -353,6 +372,7 @@ static ImuStatus bmi088_init_common(const void* config, bool require_async_ops) 
 static ImuStatus bmi088_update(void) {
     float raw_acc[3] = { 0.0f };
     float raw_gyro[3] = { 0.0f };
+    uint8_t sample_flags = IMU_SAMPLE_NONE;
     bool updated = false;
 
     if(!s_bmi088_is_initialized) {
@@ -365,7 +385,7 @@ static ImuStatus bmi088_update(void) {
         s_bmi088_gyro = bmi088_make_gyro(raw_gyro);
         s_bmi088_sample.gyro = s_bmi088_gyro;
         s_bmi088_sample.timestamp_us = bmi088_now_us();
-        s_bmi088_sample.flags |= IMU_SAMPLE_GYRO_NEW;
+        sample_flags |= IMU_SAMPLE_GYRO_NEW;
         updated = true;
     }
 
@@ -373,7 +393,8 @@ static ImuStatus bmi088_update(void) {
         s_bmi088_acc = bmi088_make_acc(raw_acc);
         s_bmi088_sample.acc = s_bmi088_acc;
         s_bmi088_sample.timestamp_us = bmi088_now_us();
-        s_bmi088_sample.flags |= IMU_SAMPLE_ACC_NEW;
+        sample_flags |= IMU_SAMPLE_ACC_NEW;
+        s_bmi088_has_acc = true;
         updated = true;
     }
 
@@ -381,6 +402,8 @@ static ImuStatus bmi088_update(void) {
         return IMU_STATUS_NOT_READY;
     }
 
+    s_bmi088_sample.flags = sample_flags;
+    bmi088_attitude_update();
     return IMU_STATUS_OK;
 }
 
@@ -404,6 +427,8 @@ static ImuStatus bmi088_blocking_update(void) {
     s_bmi088_sample.acc = s_bmi088_acc;
     s_bmi088_sample.timestamp_us = bmi088_now_us();
     s_bmi088_sample.flags = IMU_SAMPLE_GYRO_NEW | IMU_SAMPLE_ACC_NEW;
+    s_bmi088_has_acc = true;
+    bmi088_attitude_update();
     return IMU_STATUS_OK;
 }
 
@@ -425,9 +450,7 @@ static ImuGyro bmi088_get_gyro(void) {
  * @brief 获取 BMI088 最近一次缓存的姿态角
  */
 static ImuAngle bmi088_get_angle(void) {
-    ImuAngle angle = { 0.0f, 0.0f, 0.0f };
-
-    return angle;
+    return s_bmi088_angle;
 }
 
 static ImuStatus bmi088_get_sample(ImuSample* sample) {
@@ -825,6 +848,39 @@ static bool bmi088_config_is_valid(const Bmi088Config* config, bool require_asyn
     }
 
     return true;
+}
+
+static void bmi088_attitude_init(const ImuAttitudeConfig* config) {
+    if(config == 0 || config->mode == IMU_ATTITUDE_NONE) {
+        s_bmi088_attitude_enabled = false;
+        return;
+    }
+
+    s_bmi088_attitude_enabled =
+        (imu_attitude_init(&s_bmi088_attitude, config) == IMU_ATTITUDE_STATUS_OK);
+}
+
+static void bmi088_attitude_update(void) {
+    ImuSample sample = { 0 };
+    ImuAttitudeStatus status = IMU_ATTITUDE_STATUS_OK;
+
+    if(!s_bmi088_attitude_enabled) {
+        return;
+    }
+
+    if((s_bmi088_sample.flags & IMU_SAMPLE_GYRO_NEW) == 0U) {
+        return;
+    }
+
+    sample = s_bmi088_sample;
+    if(s_bmi088_has_acc) {
+        sample.flags |= IMU_SAMPLE_ACC_NEW;
+    }
+
+    status = imu_attitude_update(&s_bmi088_attitude, &sample);
+    if(status == IMU_ATTITUDE_STATUS_OK) {
+        (void)imu_attitude_get_angle(&s_bmi088_attitude, &s_bmi088_angle);
+    }
 }
 
 static void bmi088_gpio_init(void) {
