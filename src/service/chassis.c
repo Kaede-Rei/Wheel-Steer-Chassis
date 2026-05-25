@@ -381,7 +381,7 @@ static void chassis_external_to_internal_twist(float vx_ext, float vy_ext, float
 static void chassis_internal_to_external_twist(float vx_int, float vy_int, float wz_int, float* vx_ext, float* vy_ext, float* wz_ext);
 
 /**
- * @brief 将角度归一化到 [-pi, pi] 区间
+ * @brief 将角度归一化到 (-pi, pi] 区间
  *
  * 单位为 rad；
  * 该函数用于计算最短角度误差
@@ -403,10 +403,11 @@ static float chassis_wrap_pi(float angle);
 static float chassis_smoothstep(float x);
 
 /**
- * @brief 选择距离当前电机位置最近的同舵向绝对目标角
+ * @brief 按当前模式生成同舵向的转向电机绝对目标角
  *
  * 输入 target_angle 表示理论舵向角；
- * 输出为位置边界内的等效绝对目标角
+ * ABS_NEAREST 模式选择离当前转向位置最近的等效绝对角，
+ * WRAP_PI 模式直接将最终目标限制到 (-pi, pi]
  *
  * @param current_angle 当前转向电机绝对位置角，单位 rad
  * @param target_angle 理论舵向角，单位 rad
@@ -1024,6 +1025,7 @@ static float chassis_select_nearest_heading_angle(float current_angle, float tar
     target_angle = chassis_wrap_pi(target_angle);
 
     if(s_chassis.config.steer_target_mode == CHASSIS_STEER_TARGET_WRAP_PI) {
+        /* Wrap mode discards multi-turn continuity and uses the wrapped target directly. */
         return target_angle;
     }
 
