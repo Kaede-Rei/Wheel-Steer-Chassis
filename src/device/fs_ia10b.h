@@ -32,16 +32,6 @@ typedef struct {
     bool valid;                               /**< true 表示已经收到过有效帧 */
 } FsIa10bData;
 
-/**
- * @brief i.BUS 接收调试信息
- */
-typedef struct {
-    uint8_t bytes[FS_IA10B_IBUS_FRAME_LEN]; /**< 最近一帧原始字节快照 */
-    uint32_t rx_byte_count;                 /**< 接收字节总计数 */
-    uint32_t header0_count;                 /**< 识别到 0x20 帧头第一字节的次数 */
-    uint32_t header01_count;                /**< 识别到完整帧头的次数 */
-    uint8_t latest_byte;                    /**< 最近收到的单字节 */
-} FsIa10bDebug;
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
 
 /**
@@ -64,13 +54,6 @@ void ibus_maintain(void);
  * @return true 表示已经收到有效数据；false 表示参数无效或尚无有效帧
  */
 bool ibus_get_data(FsIa10bData* out);
-
-/**
- * @brief 获取 i.BUS 调试信息快照
- * @param out 输出调试信息
- * @return true 表示复制成功；false 表示输出指针为空
- */
-bool ibus_get_debug(FsIa10bDebug* out);
 
 /**
  * @brief 判断 i.BUS 遥控链路是否在线

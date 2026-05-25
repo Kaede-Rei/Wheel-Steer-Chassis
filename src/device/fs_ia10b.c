@@ -109,14 +109,6 @@ static bool s_online_logged = false;
 static volatile FsIa10bData s_data;
 
 /**
- * @brief i.BUS 解析调试信息
- *
- * 该结构保存最近字节和计数器；
- * 用于排查冷启动接收机是否真正有数据进来
- */
-static volatile FsIa10bDebug s_debug;
-
-/**
  * @brief 是否有待处理的接收错误需要重启 DMA
  *
  * 该标志在 UART 错误回调中置位；
@@ -218,7 +210,6 @@ static void ibus_parse_frame(const uint8_t frame[FS_IA10B_IBUS_FRAME_LEN]);
 
 void ibus_init(void) {
     memset((void*)&s_data, 0, sizeof(s_data));
-    memset((void*)&s_debug, 0, sizeof(s_debug));
     memset(s_frame, 0, sizeof(s_frame));
     memset(s_dma_rx_buf, 0, sizeof(s_dma_rx_buf));
 
@@ -281,23 +272,6 @@ bool ibus_get_data(FsIa10bData* out) {
     }
 
     return out->valid;
-}
-
-bool ibus_get_debug(FsIa10bDebug* out) {
-    uint32_t primask;
-
-    if(out == NULL) {
-        return false;
-    }
-
-    primask = __get_PRIMASK();
-    __disable_irq();
-    *out = s_debug;
-    if(primask == 0u) {
-        __enable_irq();
-    }
-
-    return true;
 }
 
 bool ibus_is_online(uint32_t timeout_ms) {
@@ -377,18 +351,8 @@ static void ibus_invalidate_dma_buffer(uint16_t size) {
 }
 
 static void ibus_feed_byte(uint8_t byte) {
-    uint8_t i;
-
-    s_debug.rx_byte_count++;
-    s_debug.latest_byte = byte;
-    for(i = 0u; i < (FS_IA10B_IBUS_FRAME_LEN - 1u); ++i) {
-        s_debug.bytes[i] = s_debug.bytes[i + 1u];
-    }
-    s_debug.bytes[FS_IA10B_IBUS_FRAME_LEN - 1u] = byte;
-
     if(s_frame_index == 0u) {
         if(byte == IBUS_HEADER_0) {
-            s_debug.header0_count++;
             s_frame[0] = byte;
             s_frame_index = 1u;
         }
@@ -397,7 +361,6 @@ static void ibus_feed_byte(uint8_t byte) {
 
     if(s_frame_index == 1u) {
         if(byte == IBUS_HEADER_1) {
-            s_debug.header01_count++;
             s_frame[1] = byte;
             s_frame_index = 2u;
         }

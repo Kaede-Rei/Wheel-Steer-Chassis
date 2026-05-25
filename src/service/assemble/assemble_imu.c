@@ -4,8 +4,6 @@
 #include "imu/imu.h"
 #include "log.h"
 #include "stm32_hal_bmi088.h"
-#include "stm32_hal_exti.h"
-#include "stm32_hal_spi.h"
 
 // ! ========================= 接 口 函 数 实 现 ========================= ! //
 
@@ -29,11 +27,9 @@ SystemStatus assemble_imu(void) {
             "BMI088 initialization failed: %s (%s)",
             imu.status_str(status),
             bmi088_error_str(bmi088_get_init_error()));
+        return SYSTEM_STATUS_ERROR;
     }
 
-    exti_register_callback(accel_int_pin, bmi088_exti_callback);
-    exti_register_callback(gyro_int_pin, bmi088_exti_callback);
-    spi_register_txrx_complete_callback(&hspi2, stm32_bmi088_spi_txrx_complete_callback);
-    spi_register_error_callback(&hspi2, stm32_bmi088_spi_error_callback);
+    stm32_bmi088_register_callbacks();
     return SYSTEM_STATUS_OK;
 }

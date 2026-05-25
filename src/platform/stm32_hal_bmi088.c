@@ -1,8 +1,10 @@
 #include "stm32_hal_bmi088.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "delay.h"
+#include "stm32_hal_exti.h"
 #include "stm32_hal_spi.h"
 
 // ! ========================= 私 有 函 数 声 明 ========================= ! //
@@ -15,6 +17,8 @@ static uint8_t bmi088_read_write_byte(uint8_t tx_data);
 static bool bmi088_transmit_receive_dma(uint8_t* tx_data, uint8_t* rx_data, uint16_t len);
 static void* bmi088_get_spi_handle(void);
 static void bmi088_delay_us(uint16_t us);
+static void bmi088_cache_clean(const void* addr, uint32_t len);
+static void bmi088_cache_invalidate(const void* addr, uint32_t len);
 
 // ! ========================= 变 量 声 明 ========================= ! //
 
@@ -29,6 +33,8 @@ static const Bmi088PortOps bmi088_ops = {
     .now_ms = HAL_GetTick,
     .delay_ms = delay_ms,
     .delay_us = bmi088_delay_us,
+    .cache_clean = bmi088_cache_clean,
+    .cache_invalidate = bmi088_cache_invalidate,
 };
 
 // ! ========================= 接 口 函 数 实 现 ========================= ! //
@@ -43,6 +49,13 @@ uint16_t stm32_bmi088_get_accel_int_pin(void) {
 
 uint16_t stm32_bmi088_get_gyro_int_pin(void) {
     return GYRO_INT_Pin;
+}
+
+void stm32_bmi088_register_callbacks(void) {
+    exti_register_callback(ACC_INT_Pin, bmi088_exti_callback);
+    exti_register_callback(GYRO_INT_Pin, bmi088_exti_callback);
+    spi_register_txrx_complete_callback(&hspi2, stm32_bmi088_spi_txrx_complete_callback);
+    spi_register_error_callback(&hspi2, stm32_bmi088_spi_error_callback);
 }
 
 void stm32_bmi088_spi_txrx_complete_callback(SPI_HandleTypeDef* hspi) {
@@ -108,4 +121,38 @@ static void bmi088_delay_us(uint16_t us) {
             }
         }
     }
+}
+
+/**
+ * @brief 在 DMA 启动前清理发送缓冲对应的 cache 行
+ * @param addr 缓冲区起始地址
+ * @param len 缓冲区长度，单位字节
+ */
+static void bmi088_cache_clean(const void* addr, uint32_t len) {
+#if defined(__DCACHE_PRESENT) && (__DCACHE_PRESENT == 1U)
+    uintptr_t start = ((uintptr_t)addr) & ~(uintptr_t)31U;
+    int32_t size = (int32_t)((((uintptr_t)addr + len + 31U) & ~(uintptr_t)31U) - start);
+
+    SCB_CleanDCache_by_Addr((uint32_t*)start, size);
+#else
+    (void)addr;
+    (void)len;
+#endif
+}
+
+/**
+ * @brief 在 DMA 结束后失效接收缓冲对应的 cache 行
+ * @param addr 缓冲区起始地址
+ * @param len 缓冲区长度，单位字节
+ */
+static void bmi088_cache_invalidate(const void* addr, uint32_t len) {
+#if defined(__DCACHE_PRESENT) && (__DCACHE_PRESENT == 1U)
+    uintptr_t start = ((uintptr_t)addr) & ~(uintptr_t)31U;
+    int32_t size = (int32_t)((((uintptr_t)addr + len + 31U) & ~(uintptr_t)31U) - start);
+
+    SCB_InvalidateDCache_by_Addr((uint32_t*)start, size);
+#else
+    (void)addr;
+    (void)len;
+#endif
 }
