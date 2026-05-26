@@ -1009,18 +1009,26 @@ static void chassis_internal_to_external_twist(float vx_int, float vy_int, float
 }
 
 static float chassis_wrap_pi(float angle) {
-    while(angle > CHASSIS_PI) {
-        angle -= CHASSIS_2PI;
-    }
-    while(angle <= -CHASSIS_PI) {
-        angle += CHASSIS_2PI;
+    if(!isfinite(angle)) {
+        return 0.0f;
     }
 
+    angle = fmodf(angle, CHASSIS_2PI);
+    if(angle > CHASSIS_PI) {
+        angle -= CHASSIS_2PI;
+    }
+    else if(angle <= -CHASSIS_PI) {
+        angle += CHASSIS_2PI;
+    }
     return angle;
 }
 
 static float chassis_select_nearest_heading_angle(float current_angle, float target_angle) {
     float nearest_target;
+
+    if(!isfinite(current_angle)) {
+        current_angle = 0.0f;
+    }
 
     target_angle = chassis_wrap_pi(target_angle);
 
