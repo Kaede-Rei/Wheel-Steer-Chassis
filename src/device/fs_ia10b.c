@@ -40,28 +40,14 @@
 #define IBUS_CHANNEL_MAX 2200u
 
 /**
- * @brief UART5 DMA 接收缓存长度
- *
- * i.BUS 单帧长度为 32 字节；
- * 这里使用 64 字节以容纳一次空闲中断中的多帧片段
- */
-#define IBUS_DMA_RX_BUF_LEN 64u
-
-/**
- * @brief 接收 DMA 自动重启的最小间隔
+ * @brief 接收自动重启的最小间隔
  *
  * 接收机冷启动未稳定时可能暂时无有效帧；
  * 该间隔用于限制恢复尝试频率
  */
 #define IBUS_RX_RESTART_INTERVAL_MS 200u
 
-/**
- * @brief UART5 i.BUS 字节流的 DMA 接收缓存
- *
- * 缓存按 32 字节对齐；
- * 这样在解析前可以安全地执行 DCache 失效操作
- */
-__attribute__((section(".ram_d2"), aligned(32))) static uint8_t s_dma_rx_buf[IBUS_DMA_RX_BUF_LEN];
+static uint8_t s_rx_byte = 0u;
 
 /**
  * @brief i.BUS 单帧解析缓存
@@ -80,7 +66,7 @@ static uint8_t s_frame[FS_IA10B_IBUS_FRAME_LEN];
 static uint8_t s_frame_index = 0u;
 
 /**
- * @brief 上一次重启接收 DMA 的系统时间戳
+ * @brief 上一次重启接收的系统时间戳
  *
  * 单位为 HAL_GetTick() 的毫秒计数；
  * 用于限制冷启动恢复动作的频率
@@ -88,7 +74,7 @@ static uint8_t s_frame_index = 0u;
 static uint32_t s_last_restart_ms = 0u;
 
 /**
- * @brief UART5 ReceiveToIdle DMA 是否已经启动并在等待数据
+ * @brief UART5 单字节中断接收是否已经启动并在等待数据
  */
 static volatile bool s_rx_active = false;
 
@@ -109,7 +95,7 @@ static bool s_online_logged = false;
 static volatile FsIa10bData s_data;
 
 /**
- * @brief 是否有待处理的接收错误需要重启 DMA
+ * @brief 是否有待处理的接收错误需要重启接收
  *
  * 该标志在 UART 错误回调中置位；
  * 主循环看到后会执行重启流程
@@ -124,43 +110,25 @@ static volatile bool s_abort_before_restart = false;
 // ! ========================= 私 有 函 数 声 明 ========================= ! //
 
 /**
- * @brief 处理 UART 空闲行接收事件
- *
- * 平台层在 UART5 ReceiveToIdle DMA 回调中调用本函数；
- * 函数会先维护缓存一致性，再逐字节喂给 i.BUS 解析器
- *
- * @param size HAL 本次报告的接收字节数
+ * @brief 处理 UART5 单字节接收完成事件
  */
-static void ibus_rx_event_callback(uint16_t size);
+static void ibus_rx_complete_callback(void);
 
 /**
  * @brief 处理 UART5 错误回调
  *
  * 出错后会清空当前帧同步状态；
- * 然后标记主循环重新启动 DMA 接收以等待下一帧
+ * 然后标记主循环重新启动接收以等待下一帧
  */
 static void ibus_error_callback(void);
 
 /**
- * @brief 重启 UART5 空闲行 DMA 接收
+ * @brief 重启 UART5 单字节中断接收
  *
- * 每次启动前会清空 DMA 缓存并维护 DCache；
- * 成功后等待下一次接收事件回调
- *
- * @return true DMA 接收启动成功
- * @return false DMA 接收启动失败
+ * @return true 接收启动成功
+ * @return false 接收启动失败
  */
 static bool ibus_restart_receive(void);
-
-/**
- * @brief 让 DMA 接收缓存对 CPU 可见
- *
- * STM32H7 开启缓存后，DMA 写入内存不会自动刷新 CPU 缓存；
- * 解析前必须对接收区域执行 DCache 失效
- *
- * @param size 需要失效的接收字节数
- */
-static void ibus_invalidate_dma_buffer(uint16_t size);
 
 /**
  * @brief 向 i.BUS 帧解析器输入一个字节
@@ -211,7 +179,7 @@ static void ibus_parse_frame(const uint8_t frame[FS_IA10B_IBUS_FRAME_LEN]);
 void ibus_init(void) {
     memset((void*)&s_data, 0, sizeof(s_data));
     memset(s_frame, 0, sizeof(s_frame));
-    memset(s_dma_rx_buf, 0, sizeof(s_dma_rx_buf));
+    s_rx_byte = 0u;
 
     s_frame_index = 0u;
     s_last_restart_ms = 0u;
@@ -220,7 +188,7 @@ void ibus_init(void) {
     s_ibus_restart_pending = true;
     s_abort_before_restart = false;
 
-    uart_register_rx_event_callback(&huart5, ibus_rx_event_callback);
+    uart_register_rx_complete_callback(&huart5, ibus_rx_complete_callback);
     uart_register_error_callback(&huart5, ibus_error_callback);
 }
 
@@ -249,11 +217,11 @@ void ibus_maintain(void) {
     s_frame_index = 0u;
     if(s_abort_before_restart) {
         s_abort_before_restart = false;
-        (void)uart_abort_receive_dma(&huart5);
+        (void)uart_abort_receive_it(&huart5);
     }
 
     if(!ibus_restart_receive()) {
-        s_ibus_restart_pending = false;
+        s_ibus_restart_pending = true;
     }
 }
 
@@ -305,22 +273,13 @@ uint16_t ibus_get_channel(uint8_t index) {
 
 // ! ========================= 私 有 函 数 实 现 ========================= ! //
 
-static void ibus_rx_event_callback(uint16_t size) {
-    uint16_t i;
-
+static void ibus_rx_complete_callback(void) {
     s_rx_active = false;
+    ibus_feed_byte(s_rx_byte);
 
-    if(size > IBUS_DMA_RX_BUF_LEN) {
-        size = IBUS_DMA_RX_BUF_LEN;
+    if(!ibus_restart_receive()) {
+        s_ibus_restart_pending = true;
     }
-
-    ibus_invalidate_dma_buffer(size);
-
-    for(i = 0u; i < size; ++i) {
-        ibus_feed_byte(s_dma_rx_buf[i]);
-    }
-
-    s_ibus_restart_pending = true;
 }
 
 static void ibus_error_callback(void) {
@@ -332,22 +291,10 @@ static void ibus_error_callback(void) {
 }
 
 static bool ibus_restart_receive(void) {
-    memset(s_dma_rx_buf, 0, sizeof(s_dma_rx_buf));
-    ibus_invalidate_dma_buffer(IBUS_DMA_RX_BUF_LEN);
+    s_rx_byte = 0u;
     s_last_restart_ms = HAL_GetTick();
-    s_rx_active = uart_receive_to_idle_dma(&huart5, s_dma_rx_buf, IBUS_DMA_RX_BUF_LEN);
+    s_rx_active = uart_receive_it(&huart5, &s_rx_byte, 1u);
     return s_rx_active;
-}
-
-static void ibus_invalidate_dma_buffer(uint16_t size) {
-    uintptr_t start = ((uintptr_t)s_dma_rx_buf) & ~(uintptr_t)31U;
-    uintptr_t end = ((uintptr_t)s_dma_rx_buf + size + 31U) & ~(uintptr_t)31U;
-
-    if(size == 0u) {
-        return;
-    }
-
-    SCB_InvalidateDCache_by_Addr((uint32_t*)start, (int32_t)(end - start));
 }
 
 static void ibus_feed_byte(uint8_t byte) {
