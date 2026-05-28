@@ -63,6 +63,21 @@ typedef struct {
 } Bmi088Config;
 
 /**
+ * @brief BMI088 姿态/温漂补偿调试信息
+ */
+typedef struct {
+    float temperature;         /**< 当前缓存温度，单位 ℃ */
+    float gyro_temp_ref;       /**< 静态标定得到的参考温度，单位 ℃ */
+    uint16_t gyro_temp_count;  /**< 静态标定阶段累计的有效温度样本数 */
+    bool gyro_temp_valid;      /**< true 表示参考温度有效 */
+    ImuGyro gyro_bias;         /**< 当前陀螺零偏估计，单位 rad/s */
+    ImuGyro gyro_corrected;    /**< 当前零偏+温漂补偿后的角速度，单位 rad/s */
+    ImuGyro gyro_temp_comp;    /**< 当前三轴温漂补偿量，单位 rad/s */
+    ImuGyro gyro_temp_coeff;   /**< 当前三轴温漂补偿系数，单位 rad/s/℃ */
+    bool zru_active;           /**< true 表示当前已进入静止 ZRU 修正 */
+} Bmi088AttitudeDebug;
+
+/**
  * @brief BMI088 中断 + SPI DMA 异步 IMU 实例
  */
 extern const ImuInterface bmi088_instance;
@@ -105,6 +120,13 @@ Bmi088Error bmi088_get_init_error(void);
  * 温度由 `update()` 内部周期性刷新，此接口不再触发阻塞读取
  */
 float bmi088_get_temp(void);
+
+/**
+ * @brief 获取 BMI088 当前姿态/温漂补偿调试信息
+ * @param debug 输出调试信息
+ * @return IMU 状态码
+ */
+ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug);
 
 /**
  * @brief BMI088 数据就绪 EXTI 回调转发入口
