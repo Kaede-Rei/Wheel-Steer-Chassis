@@ -116,6 +116,8 @@ static inline void entry_loop(void) {
             remote = 0;
 
             gw_gray_update();
+
+            bmi088_set_zru_enabled(false);
         }
     }
 

@@ -60,6 +60,7 @@ typedef struct {
     bool gyro_temp_valid;     /**< true 表示 gyro_temp_ref 有效，且温度补偿可用 */
 
     uint32_t zru_static_time_us; /**< 连续满足静止条件的累计时长，单位 us */
+    bool zru_enabled;           /**< true 表示允许执行静止 ZRU */
     bool zru_active;            /**< true 表示本次更新已触发静止 ZRU */
 } ImuAttitude;
 

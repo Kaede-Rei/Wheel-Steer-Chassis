@@ -74,6 +74,7 @@ typedef struct {
     ImuGyro gyro_corrected;    /**< 当前零偏+温漂补偿后的角速度，单位 rad/s */
     ImuGyro gyro_temp_comp;    /**< 当前三轴温漂补偿量，单位 rad/s */
     ImuGyro gyro_temp_coeff;   /**< 当前三轴温漂补偿系数，单位 rad/s/℃ */
+    bool zru_enabled;          /**< true 表示当前允许执行静止 ZRU */
     bool zru_active;           /**< true 表示当前已进入静止 ZRU 修正 */
 } Bmi088AttitudeDebug;
 
@@ -127,6 +128,19 @@ float bmi088_get_temp(void);
  * @return IMU 状态码
  */
 ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug);
+
+/**
+ * @brief 设置 BMI088 姿态模块的静止 ZRU 开关
+ * @param enabled true 允许执行静止 ZRU，false 禁止
+ * @return IMU 状态码
+ */
+ImuStatus bmi088_set_zru_enabled(bool enabled);
+
+/**
+ * @brief 获取 BMI088 姿态模块当前是否允许执行静止 ZRU
+ * @return true 允许执行，false 禁止或未启用姿态模块
+ */
+bool bmi088_is_zru_enabled(void);
 
 /**
  * @brief BMI088 数据就绪 EXTI 回调转发入口

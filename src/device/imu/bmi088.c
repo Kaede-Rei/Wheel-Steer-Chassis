@@ -243,7 +243,7 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->accel_int_pin = accel_int_pin;
     config->gyro_int_pin = gyro_int_pin;
     config->attitude.mode = IMU_ATTITUDE_MAHONY_6AXIS;
-    config->attitude.gyro_calib_samples = 3000U;
+    config->attitude.gyro_calib_samples = 1000U;
     config->attitude.acc_norm = 9.80665f;
     config->attitude.acc_norm_tolerance = 1.5f;
     config->attitude.max_acc_age_us = 20000U;
@@ -254,10 +254,10 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->attitude.mahony_ki_z = 0.0f;
     config->attitude.gyro_x_temp_coeff = 0.0f;
     config->attitude.gyro_y_temp_coeff = 0.0f;
-    config->attitude.gyro_z_temp_coeff = 0.00010f;
-    config->attitude.zru_gyro_threshold = 0.035f;
-    config->attitude.zru_min_static_us = 800000U;
-    config->attitude.zru_bias_gain = 0.35f;
+    config->attitude.gyro_z_temp_coeff = 0.0000950025f;
+    config->attitude.zru_gyro_threshold = 0.015f;
+    config->attitude.zru_min_static_us = 1200000U;
+    config->attitude.zru_bias_gain = 0.12f;
 
     return IMU_STATUS_OK;
 }
@@ -333,9 +333,33 @@ ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug) {
     debug->gyro_temp_coeff.x = s_bmi088_attitude.config.gyro_x_temp_coeff;
     debug->gyro_temp_coeff.y = s_bmi088_attitude.config.gyro_y_temp_coeff;
     debug->gyro_temp_coeff.z = s_bmi088_attitude.config.gyro_z_temp_coeff;
+    debug->zru_enabled = s_bmi088_attitude.zru_enabled;
     debug->zru_active = s_bmi088_attitude.zru_active;
 
     return IMU_STATUS_OK;
+}
+
+ImuStatus bmi088_set_zru_enabled(bool enabled) {
+    if(!s_bmi088_is_initialized) {
+        return IMU_STATUS_NOT_INITIALIZE;
+    }
+
+    if(!s_bmi088_attitude_enabled) {
+        return IMU_STATUS_UNSUPPORTED;
+    }
+
+    s_bmi088_attitude.zru_enabled = enabled;
+    s_bmi088_attitude.zru_active = false;
+    s_bmi088_attitude.zru_static_time_us = 0U;
+    return IMU_STATUS_OK;
+}
+
+bool bmi088_is_zru_enabled(void) {
+    if(!s_bmi088_is_initialized || !s_bmi088_attitude_enabled) {
+        return false;
+    }
+
+    return s_bmi088_attitude.zru_enabled;
 }
 
 /**

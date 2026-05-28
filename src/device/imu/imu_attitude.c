@@ -39,6 +39,7 @@ ImuAttitudeStatus imu_attitude_init(ImuAttitude* attitude, const ImuAttitudeConf
     memset(attitude, 0, sizeof(ImuAttitude));
     attitude->config = *config;
     attitude->quat.w = 1.0f;
+    attitude->zru_enabled = true;
 
     if(config->gyro_calib_samples == 0U) {
         attitude->calibrated = true;
@@ -547,7 +548,7 @@ static bool imu_attitude_is_static_candidate(const ImuAttitude* attitude, const 
     }
 
     threshold = attitude->config.zru_gyro_threshold;
-    if(threshold <= 0.0f || !attitude->acc_trusted) {
+    if(!attitude->zru_enabled || threshold <= 0.0f || !attitude->acc_trusted) {
         return false;
     }
 

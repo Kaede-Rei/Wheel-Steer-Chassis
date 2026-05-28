@@ -4,7 +4,9 @@
 #include "chassis_yaw_hold.h"
 #include "fs_ia10b.h"
 #include "imu/imu.h"
+#include "imu/bmi088.h"
 
+#include <math.h>
 #include <string.h>
 
 // ! ========================= 变 量 声 明 ========================= ! //
@@ -197,6 +199,7 @@ void remote_init(void) {
 void remote_process(void) {
     FsIa10bData rc_data;
     RemoteSpeedLimit speed_limit;
+    bool zru_should_enable = true;
 
     ibus_maintain();
 
@@ -206,6 +209,7 @@ void remote_process(void) {
         s_command.wz = 0.0f;
         s_command.online = false;
         chassis_yaw_hold_reset();
+        (void)bmi088_set_zru_enabled(true);
         (void)chassis.set_velocity(0.0f, 0.0f, 0.0f);
         return;
     }
@@ -223,6 +227,7 @@ void remote_process(void) {
         s_command.wz = 0.0f;
         s_command.online = true;
         chassis_yaw_hold_reset();
+        (void)bmi088_set_zru_enabled(true);
         (void)chassis.brake();
         return;
     }
@@ -233,6 +238,10 @@ void remote_process(void) {
         s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * speed_limit.max_vy;
         s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * speed_limit.max_wz;
         s_command.online = true;
+        zru_should_enable = fabsf(s_command.vx) <= 1.0e-4f &&
+            fabsf(s_command.vy) <= 1.0e-4f &&
+            fabsf(s_command.wz) <= 1.0e-4f;
+        (void)bmi088_set_zru_enabled(zru_should_enable);
 
         s_command.wz = chassis_yaw_hold_apply(
             s_command.vx,
@@ -246,6 +255,7 @@ void remote_process(void) {
     else {
         s_command.online = true;
         chassis_yaw_hold_reset();
+        (void)bmi088_set_zru_enabled(true);
         (void)chassis.set_velocity(0.0f, 0.0f, 0.0f);
     }
 }
