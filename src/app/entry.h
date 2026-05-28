@@ -13,10 +13,12 @@
 // ! service ! //
 #include "assemble/assemble.h"
 #include "chassis.h"
+// #include "chassis_yaw_hold.h"
 #include "remote.h"
 
 // ! device ! //
 #include "imu/imu.h"
+#include "imu/bmi088.h"
 #include "rgb_led/rgb_led.h"
 #include "gw_gray.h"
 
@@ -38,9 +40,22 @@ static ms_t log_task = 0;
 static ms_t heartbeat_task = 0;
 static ImuAcc accel = { 0.0f, 0.0f, 0.0f };
 static ImuGyro gyro = { 0.0f, 0.0f, 0.0f };
+static ImuGyro gyro_bias = { 0.0f, 0.0f, 0.0f };
+static ImuGyro gyro_corrected = { 0.0f, 0.0f, 0.0f };
 static ImuAngle angle = { 0.0f, 0.0f, 0.0f };
+static float temp = 0.0f;
 static uint8_t remote = 0;
 static uint8_t led_state = 0u;
+
+
+static float gyro_z_sum = 0.0f;
+static float gyro_unbiased_z_sum = 0.0f;
+static float gyro_z_min = 0.0f;
+static float gyro_z_max = 0.0f;
+static uint32_t gyro_stat_count = 0U;
+static bool gyro_stat_inited = false;
+static float yaw_last_log = 0.0f;
+static bool yaw_last_log_valid = false;
 
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
 
@@ -98,7 +113,23 @@ static inline void entry_loop(void) {
         if(imu.update() == IMU_STATUS_OK) {
             accel = imu.get_acc();
             gyro = imu.get_gyro();
+            gyro_bias = imu_get_gyro_bias();
+            gyro_corrected = imu_get_gyro_corrected();
             angle = imu.get_angle();
+
+            if(!gyro_stat_inited) {
+                gyro_z_min = gyro.z;
+                gyro_z_max = gyro.z;
+                gyro_stat_inited = true;
+            }
+
+            gyro_z_sum += gyro.z;
+            gyro_unbiased_z_sum += gyro_corrected.z;
+
+            if(gyro.z < gyro_z_min) gyro_z_min = gyro.z;
+            if(gyro.z > gyro_z_max) gyro_z_max = gyro.z;
+
+            gyro_stat_count++;
         }
 
         chassis.process();
@@ -130,9 +161,33 @@ static inline void entry_loop(void) {
     }
 
     if(delay_nb_ms(&log_task, 1000)) {
-        // log_info("Heartbeat");
-        // log_info("front gray: %u, back gray: %u", gw_gray_get_front_black(), gw_gray_get_back_black());
-        log_vofa(angle.yaw);
+        float gyro_z_mean = 0.0f;
+        float gyro_unbiased_z_mean = 0.0f;
+        float yaw_delta = 0.0f;
+        temp = bmi088_get_temp();
+
+        if(gyro_stat_count > 0U) {
+            gyro_z_mean = gyro_z_sum / (float)gyro_stat_count;
+            gyro_unbiased_z_mean = gyro_unbiased_z_sum / (float)gyro_stat_count;
+        }
+
+        if(yaw_last_log_valid) {
+            yaw_delta = angle.yaw - yaw_last_log;
+
+            while(yaw_delta > 3.1415926f) yaw_delta -= 6.2831853f;
+            while(yaw_delta < -3.1415926f) yaw_delta += 6.2831853f;
+        }
+
+        yaw_last_log = angle.yaw;
+        yaw_last_log_valid = true;
+
+        log_vofa(angle.yaw, yaw_delta, gyro.z, gyro_z_mean, gyro_bias.z, gyro_corrected.z,
+            gyro_unbiased_z_mean, gyro_z_min, gyro_z_max, temp);
+
+        gyro_z_sum = 0.0f;
+        gyro_unbiased_z_sum = 0.0f;
+        gyro_stat_count = 0U;
+        gyro_stat_inited = false;
     }
 }
 

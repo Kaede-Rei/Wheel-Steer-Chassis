@@ -87,6 +87,22 @@ ImuAttitudeStatus imu_attitude_get_angle(const ImuAttitude* attitude, ImuAngle* 
 ImuAttitudeStatus imu_attitude_get_quat(const ImuAttitude* attitude, ImuQuat* quat);
 
 /**
+ * @brief 获取姿态融合估计的陀螺零偏
+ * @param attitude 算法状态对象
+ * @param gyro_bias 输出陀螺零偏，单位 rad/s
+ * @return 姿态融合状态码
+ */
+ImuAttitudeStatus imu_attitude_get_gyro_bias(const ImuAttitude* attitude, ImuGyro* gyro_bias);
+
+/**
+ * @brief 获取最近一次扣零偏和姿态修正后的角速度
+ * @param attitude 算法状态对象
+ * @param gyro_corrected 输出角速度，单位 rad/s
+ * @return 姿态融合状态码
+ */
+ImuAttitudeStatus imu_attitude_get_gyro_corrected(const ImuAttitude* attitude, ImuGyro* gyro_corrected);
+
+/**
  * @brief 重置当前 yaw 角
  * @param attitude 算法状态对象
  * @param yaw 新的 yaw 角，单位 rad

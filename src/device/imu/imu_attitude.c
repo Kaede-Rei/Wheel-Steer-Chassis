@@ -117,6 +117,32 @@ ImuAttitudeStatus imu_attitude_get_quat(const ImuAttitude* attitude, ImuQuat* qu
     return IMU_ATTITUDE_STATUS_OK;
 }
 
+
+ImuAttitudeStatus imu_attitude_get_gyro_bias(const ImuAttitude* attitude, ImuGyro* gyro_bias) {
+    if(attitude == 0 || gyro_bias == 0) {
+        return IMU_ATTITUDE_STATUS_INVALID_PARAM;
+    }
+
+    *gyro_bias = attitude->gyro_bias;
+    return IMU_ATTITUDE_STATUS_OK;
+}
+
+ImuAttitudeStatus imu_attitude_get_gyro_corrected(const ImuAttitude* attitude, ImuGyro* gyro_corrected) {
+    if(attitude == 0 || gyro_corrected == 0) {
+        return IMU_ATTITUDE_STATUS_INVALID_PARAM;
+    }
+
+    *gyro_corrected = attitude->gyro_filtered;
+    if(!attitude->calibrated) {
+        return IMU_ATTITUDE_STATUS_CALIBRATING;
+    }
+    if(!attitude->has_angle) {
+        return IMU_ATTITUDE_STATUS_NOT_READY;
+    }
+
+    return IMU_ATTITUDE_STATUS_OK;
+}
+
 ImuAttitudeStatus imu_attitude_reset_yaw(ImuAttitude* attitude, float yaw) {
     if(attitude == 0) {
         return IMU_ATTITUDE_STATUS_INVALID_PARAM;
@@ -565,7 +591,6 @@ static void imu_attitude_update_mahony(ImuAttitude* attitude, const ImuSample* s
 
         gx += attitude->config.mahony_kp * ex;
         gy += attitude->config.mahony_kp * ey;
-        gz += attitude->config.mahony_kp * ez;
     }
 
     attitude->gyro_filtered.x = gx;

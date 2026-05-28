@@ -1,4 +1,4 @@
-#include "bmi088.h"
+﻿#include "bmi088.h"
 #include "imu_attitude.h"
 
 #include <math.h>
@@ -91,6 +91,8 @@ static ImuStatus bmi088_update(void);
 static ImuStatus bmi088_blocking_update(void);
 static ImuAcc bmi088_get_acc(void);
 static ImuGyro bmi088_get_gyro(void);
+static ImuGyro bmi088_get_gyro_bias(void);
+static ImuGyro bmi088_get_gyro_corrected(void);
 static ImuAngle bmi088_get_angle(void);
 static ImuStatus bmi088_get_sample(ImuSample* sample);
 static const char* bmi088_status_str(ImuStatus status);
@@ -207,6 +209,8 @@ const ImuInterface bmi088_instance = {
     .update = bmi088_update,
     .get_acc = bmi088_get_acc,
     .get_gyro = bmi088_get_gyro,
+    .get_gyro_bias = bmi088_get_gyro_bias,
+    .get_gyro_corrected = bmi088_get_gyro_corrected,
     .get_angle = bmi088_get_angle,
     .get_sample = bmi088_get_sample,
     .status_str = bmi088_status_str,
@@ -220,6 +224,8 @@ const ImuInterface bmi088_blocking_instance = {
     .update = bmi088_blocking_update,
     .get_acc = bmi088_get_acc,
     .get_gyro = bmi088_get_gyro,
+    .get_gyro_bias = bmi088_get_gyro_bias,
+    .get_gyro_corrected = bmi088_get_gyro_corrected,
     .get_angle = bmi088_get_angle,
     .get_sample = bmi088_get_sample,
     .status_str = bmi088_status_str,
@@ -236,7 +242,7 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->accel_int_pin = accel_int_pin;
     config->gyro_int_pin = gyro_int_pin;
     config->attitude.mode = IMU_ATTITUDE_MAHONY_6AXIS;
-    config->attitude.gyro_calib_samples = 1000U;
+    config->attitude.gyro_calib_samples = 3000U;
     config->attitude.acc_norm = 9.80665f;
     config->attitude.acc_norm_tolerance = 1.5f;
     config->attitude.max_acc_age_us = 20000U;
@@ -460,6 +466,34 @@ static ImuAcc bmi088_get_acc(void) {
  */
 static ImuGyro bmi088_get_gyro(void) {
     return s_bmi088_gyro;
+}
+
+static ImuGyro bmi088_get_gyro_bias(void) {
+    ImuGyro gyro_bias = { 0.0f, 0.0f, 0.0f };
+
+    if(!s_bmi088_attitude_enabled) {
+        return gyro_bias;
+    }
+
+    (void)imu_attitude_get_gyro_bias(&s_bmi088_attitude, &gyro_bias);
+    return gyro_bias;
+}
+
+static ImuGyro bmi088_get_gyro_corrected(void) {
+    ImuGyro gyro_corrected = { 0.0f, 0.0f, 0.0f };
+    ImuGyro gyro_bias = { 0.0f, 0.0f, 0.0f };
+
+    if(!s_bmi088_attitude_enabled) {
+        return s_bmi088_gyro;
+    }
+
+    (void)imu_attitude_get_gyro_bias(&s_bmi088_attitude, &gyro_bias);
+
+    gyro_corrected.x = s_bmi088_gyro.x - gyro_bias.x;
+    gyro_corrected.y = s_bmi088_gyro.y - gyro_bias.y;
+    gyro_corrected.z = s_bmi088_gyro.z - gyro_bias.z;
+
+    return gyro_corrected;
 }
 
 /**

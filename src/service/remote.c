@@ -1,7 +1,9 @@
-#include "remote.h"
+﻿#include "remote.h"
 
 #include "chassis.h"
+#include "chassis_yaw_hold.h"
 #include "fs_ia10b.h"
+#include "imu/imu.h"
 
 #include <string.h>
 
@@ -174,7 +176,16 @@ static RemoteSpeedLimit remote_get_speed_limit(uint16_t swb);
  * i.BUS 接收驱动由 assemble_remote() 注册，实际接收由 remote_process() 维护
  */
 void remote_init(void) {
+    ChassisYawHoldConfig yaw_hold_config = chassis_yaw_hold_default_config();
+
     memset(&s_command, 0, sizeof(s_command));
+
+    yaw_hold_config.kp = 3.0f;
+    yaw_hold_config.kd = 0.08f;
+    yaw_hold_config.k_vx = 0.0f;
+    yaw_hold_config.k_vy = 0.0f;
+    yaw_hold_config.wz_limit = 0.80f;
+    chassis_yaw_hold_init(&yaw_hold_config);
 }
 
 /**
@@ -194,6 +205,7 @@ void remote_process(void) {
         s_command.vy = 0.0f;
         s_command.wz = 0.0f;
         s_command.online = false;
+        chassis_yaw_hold_reset();
         (void)chassis.set_velocity(0.0f, 0.0f, 0.0f);
         return;
     }
@@ -210,6 +222,7 @@ void remote_process(void) {
         s_command.vy = 0.0f;
         s_command.wz = 0.0f;
         s_command.online = true;
+        chassis_yaw_hold_reset();
         (void)chassis.brake();
         return;
     }
@@ -220,10 +233,19 @@ void remote_process(void) {
         s_command.vy = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_RIGHT_X], REMOTE_DEADBAND) * speed_limit.max_vy;
         s_command.wz = -remote_channel_to_norm(rc_data.channel[REMOTE_CH_LEFT_X], REMOTE_DEADBAND) * speed_limit.max_wz;
         s_command.online = true;
+
+        s_command.wz = chassis_yaw_hold_apply(
+            s_command.vx,
+            s_command.vy,
+            s_command.wz,
+            imu_get_angle().yaw,
+            imu_get_gyro_corrected().z);
+
         (void)chassis.set_velocity(s_command.vx, s_command.vy, s_command.wz);
     }
     else {
         s_command.online = true;
+        chassis_yaw_hold_reset();
         (void)chassis.set_velocity(0.0f, 0.0f, 0.0f);
     }
 }

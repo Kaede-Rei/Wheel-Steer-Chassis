@@ -124,7 +124,9 @@ typedef struct {
     ImuStatus(*init)(const void* config);      /**< 初始化具体 IMU 驱动 */
     ImuStatus(*update)(void);                  /**< 刷新具体 IMU 的最新缓存 */
     ImuAcc(*get_acc)(void);                    /**< 获取最近一次缓存的加速度 */
-    ImuGyro(*get_gyro)(void);                  /**< 获取最近一次缓存的角速度 */
+    ImuGyro(*get_gyro)(void);                  /**< 获取最近一次缓存的原始角速度 */
+    ImuGyro(*get_gyro_bias)(void);             /**< 获取姿态融合估计的陀螺零偏；可选 */
+    ImuGyro(*get_gyro_corrected)(void);        /**< 获取扣零偏后的角速度；可选 */
     ImuAngle(*get_angle)(void);                /**< 获取最近一次缓存的姿态角 */
     ImuStatus(*get_sample)(ImuSample* sample); /**< 获取最近一帧采样；可清除具体驱动的新数据标志 */
     const char* (*status_str)(ImuStatus status); /**< 状态码转字符串 */
@@ -164,10 +166,22 @@ ImuStatus imu_update(void);
 ImuAcc imu_get_acc(void);
 
 /**
- * @brief 获取最近一次缓存的角速度
- * @return 三轴角速度
+ * @brief 获取最近一次缓存的原始角速度
+ * @return 三轴角速度，单位 rad/s
  */
 ImuGyro imu_get_gyro(void);
+
+/**
+ * @brief 获取姿态融合估计的陀螺零偏
+ * @return 三轴陀螺零偏，单位 rad/s；实例不支持时返回 0
+ */
+ImuGyro imu_get_gyro_bias(void);
+
+/**
+ * @brief 获取扣除零偏后的角速度
+ * @return 三轴角速度，单位 rad/s；实例不支持时回退为原始角速度
+ */
+ImuGyro imu_get_gyro_corrected(void);
 
 /**
  * @brief 获取最近一次缓存的姿态角
