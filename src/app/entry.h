@@ -95,17 +95,17 @@ static inline void entry_loop(void) {
     if(tim6_500hz_flag) {
         tim6_500hz_flag = false;
 
+        if(imu.update() == IMU_STATUS_OK) {
+            accel = imu.get_acc();
+            gyro = imu.get_gyro();
+            angle = imu.get_angle();
+        }
+
         chassis.process();
 
         if(remote++ % 5 == 0) {
             remote_process();
             remote = 0;
-
-            if(imu.update() == IMU_STATUS_OK) {
-                accel = imu.get_acc();
-                gyro = imu.get_gyro();
-                angle = imu.get_angle();
-            }
 
             gw_gray_update();
         }

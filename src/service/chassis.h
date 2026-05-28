@@ -113,12 +113,12 @@ typedef struct {
 typedef struct {
     SteerWheel kine;
     ChassisConfig config;
-    uint8_t brake_requested;
-    uint8_t brake_latched;
-    uint8_t steer_then_drive_enabled;
-    uint8_t steer_motor_ready;
-    uint8_t drive_motor_ready;
-    uint8_t initialized;
+    bool brake_requested;
+    bool brake_latched;
+    bool steer_then_drive_enabled;
+    bool steer_motor_ready;
+    bool drive_motor_ready;
+    bool initialized;
 } Chassis;
 
 /**

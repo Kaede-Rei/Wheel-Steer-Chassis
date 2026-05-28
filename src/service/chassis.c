@@ -157,7 +157,7 @@ typedef struct {
 typedef struct {
     float steer_target_abs_angle;
     float wheel_omega;
-    uint8_t drive_inverted;
+    bool drive_inverted;
 } ChassisModuleCommand;
 
 /**
@@ -205,7 +205,7 @@ static float s_steer_speed_last_target[CHASSIS_MODULE_COUNT] = { 0.0f };
  * 首次进入控制时需要记录当前目标；
  * 后续才可根据目标变化计算 S 曲线
  */
-static uint8_t s_steer_speed_initialized[CHASSIS_MODULE_COUNT] = { 0u };
+static bool s_steer_speed_initialized[CHASSIS_MODULE_COUNT] = { false };
 /**
  * @brief 每个舵轮模块最终下发的硬件命令缓存
  *
@@ -226,7 +226,7 @@ static ChassisModuleFeedback s_module_fb[CHASSIS_MODULE_COUNT] = { 0 };
  * 用于在等效解切换时引入滞回；
  * 避免目标角接近临界值时来回翻转
  */
-static uint8_t s_last_drive_inverted[CHASSIS_MODULE_COUNT] = { 0u };
+static bool s_last_drive_inverted[CHASSIS_MODULE_COUNT] = { false };
 /**
  * @brief 转向电机上电准备重试倒计时
  *
@@ -544,24 +544,24 @@ ChassisErrorCode chassis_init(const ChassisConfig* config) {
     }
 
     s_chassis.config = *config;
-    s_chassis.brake_requested = 0u;
-    s_chassis.brake_latched = 0u;
-    s_chassis.steer_then_drive_enabled = 1u;
-    s_chassis.initialized = 0u;
+    s_chassis.brake_requested = false;
+    s_chassis.brake_latched = false;
+    s_chassis.steer_then_drive_enabled = true;
+    s_chassis.initialized = false;
     chassis_reset_steer_speed_profiles();
     s_steer_prepare_retry_countdown = 0u;
     s_drive_prepare_retry_countdown = 0u;
     s_last_steer_missing_mask = 0xFFu;
     s_last_drive_missing_mask = 0xFFu;
-    s_chassis.steer_motor_ready = 0u;
-    s_chassis.drive_motor_ready = 0u;
+    s_chassis.steer_motor_ready = false;
+    s_chassis.drive_motor_ready = false;
     for(uint8_t i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
         s_module_cmd[i].steer_target_abs_angle = 0.0f;
         s_module_cmd[i].wheel_omega = 0.0f;
-        s_module_cmd[i].drive_inverted = 0u;
+        s_module_cmd[i].drive_inverted = false;
         s_module_fb[i].steer_abs_angle = 0.0f;
         s_module_fb[i].drive_omega = 0.0f;
-        s_last_drive_inverted[i] = 0u;
+        s_last_drive_inverted[i] = false;
     }
 
     if(steer_motor.init(&steer_config) != MOTOR_STATUS_OK) {
@@ -585,7 +585,7 @@ ChassisErrorCode chassis_init(const ChassisConfig* config) {
         log_warn("CHASSIS initial drive prepare incomplete, will retry in process");
     }
 
-    s_chassis.initialized = 1u;
+    s_chassis.initialized = true;
     log_info("CHASSIS init done");
     return ch.OK;
 }
@@ -598,12 +598,12 @@ ChassisErrorCode chassis_init(const ChassisConfig* config) {
  * @return ChassisErrorCode 状态码
  */
 ChassisErrorCode chassis_set_velocity(float vx, float vy, float wz) {
-    if(s_chassis.initialized == 0u) {
+    if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
-    s_chassis.brake_requested = 0u;
-    s_chassis.brake_latched = 0u;
+    s_chassis.brake_requested = false;
+    s_chassis.brake_latched = false;
     chassis_external_to_internal_twist(vx, vy, wz,
         &s_chassis.kine.control.vx, &s_chassis.kine.control.vy, &s_chassis.kine.control.wz);
 
@@ -616,11 +616,11 @@ ChassisErrorCode chassis_set_velocity(float vx, float vy, float wz) {
  * @return ChassisErrorCode 状态码
  */
 ChassisErrorCode chassis_set_steer_then_drive_enabled(bool enabled) {
-    if(s_chassis.initialized == 0u) {
+    if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
-    s_chassis.steer_then_drive_enabled = enabled ? 1u : 0u;
+    s_chassis.steer_then_drive_enabled = enabled;
     return ch.OK;
 }
 
@@ -635,7 +635,7 @@ ChassisErrorCode chassis_process(void) {
     uint8_t steer_missing_mask = 0u;
     uint8_t drive_missing_mask = 0u;
 
-    if(s_chassis.initialized == 0u) {
+    if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
@@ -652,8 +652,8 @@ ChassisErrorCode chassis_process(void) {
         }
     }
 
-    if(chassis_maintain_motor_startup(steer_feedback_observed, steer_missing_mask,
-        drive_feedback_observed, drive_missing_mask) == false) {
+    if(!chassis_maintain_motor_startup(steer_feedback_observed, steer_missing_mask,
+        drive_feedback_observed, drive_missing_mask)) {
         s_chassis.kine.state.cur_vx = 0.0f;
         s_chassis.kine.state.cur_vy = 0.0f;
         s_chassis.kine.state.cur_wz = 0.0f;
@@ -672,10 +672,10 @@ ChassisErrorCode chassis_process(void) {
         s_chassis.kine.state.cur_wheels[map->module].steer_angle = chassis_wrap_pi(steer_abs_angle);
     }
 
-    if(s_chassis.brake_requested != 0u) {
+    if(s_chassis.brake_requested) {
         chassis_set_brake_targets();
 
-        if(s_chassis.brake_latched == 0u) {
+        if(!s_chassis.brake_latched) {
             for(i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
                 const ChassisModuleMap* map = &s_module_map[i];
                 float target_angle = s_module_cmd[map->module].steer_target_abs_angle;
@@ -686,11 +686,11 @@ ChassisErrorCode chassis_process(void) {
             }
 
             if(chassis_brake_targets_reached()) {
-                s_chassis.brake_latched = 1u;
+                s_chassis.brake_latched = true;
             }
         }
 
-        if(s_chassis.brake_latched != 0u) {
+        if(s_chassis.brake_latched) {
             for(i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
                 const ChassisModuleMap* map = &s_module_map[i];
 
@@ -719,7 +719,7 @@ ChassisErrorCode chassis_process(void) {
             chassis_resolve_drive_module_command(map->module);
         }
 
-        drive_ready = (s_chassis.steer_then_drive_enabled == 0u) || chassis_drive_targets_reached();
+        drive_ready = !s_chassis.steer_then_drive_enabled || chassis_drive_targets_reached();
 
         for(i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
             const ChassisModuleMap* map = &s_module_map[i];
@@ -750,15 +750,15 @@ ChassisErrorCode chassis_process(void) {
 ChassisErrorCode chassis_stop(void) {
     uint8_t i;
 
-    if(s_chassis.initialized == 0u) {
+    if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
     s_chassis.kine.control.vx = 0.0f;
     s_chassis.kine.control.vy = 0.0f;
     s_chassis.kine.control.wz = 0.0f;
-    s_chassis.brake_requested = 0u;
-    s_chassis.brake_latched = 0u;
+    s_chassis.brake_requested = false;
+    s_chassis.brake_latched = false;
     chassis_reset_steer_speed_profiles();
 
     for(i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
@@ -774,18 +774,18 @@ ChassisErrorCode chassis_stop(void) {
  * @return ChassisErrorCode 状态码
  */
 ChassisErrorCode chassis_brake(void) {
-    if(s_chassis.initialized == 0u) {
+    if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
     s_chassis.kine.control.vx = 0.0f;
     s_chassis.kine.control.vy = 0.0f;
     s_chassis.kine.control.wz = 0.0f;
-    if(s_chassis.brake_requested == 0u) {
-        s_chassis.brake_latched = 0u;
+    if(!s_chassis.brake_requested) {
+        s_chassis.brake_latched = false;
         chassis_reset_steer_speed_profiles();
     }
-    s_chassis.brake_requested = 1u;
+    s_chassis.brake_requested = true;
 
     return ch.OK;
 }
@@ -823,9 +823,9 @@ const SteerWheelControl* chassis_get_control(void) {
  * @return bool `true` 表示底盘就绪，`false` 表示仍在等待反馈
  */
 bool chassis_is_ready(void) {
-    return s_chassis.initialized != 0u
-        && s_chassis.steer_motor_ready != 0u
-        && s_chassis.drive_motor_ready != 0u;
+    return s_chassis.initialized
+        && s_chassis.steer_motor_ready
+        && s_chassis.drive_motor_ready;
 }
 
 /**
@@ -914,15 +914,15 @@ static ChassisErrorCode chassis_prepare_drive_motors(void) {
 static bool chassis_maintain_motor_startup(bool steer_feedback_observed, uint8_t steer_missing_mask,
     bool drive_feedback_observed, uint8_t drive_missing_mask) {
     if(steer_feedback_observed) {
-        if(s_chassis.steer_motor_ready == 0u) {
+        if(!s_chassis.steer_motor_ready) {
             log_info("CHASSIS steer motor ready");
         }
         s_steer_prepare_retry_countdown = 0u;
-        s_chassis.steer_motor_ready = 1u;
+        s_chassis.steer_motor_ready = true;
         s_last_steer_missing_mask = 0u;
     }
     else {
-        s_chassis.steer_motor_ready = 0u;
+        s_chassis.steer_motor_ready = false;
 
         if(steer_missing_mask != s_last_steer_missing_mask) {
             log_warn("CHASSIS steer feedback missing mask=0x%02X", steer_missing_mask);
@@ -940,15 +940,15 @@ static bool chassis_maintain_motor_startup(bool steer_feedback_observed, uint8_t
     }
 
     if(drive_feedback_observed) {
-        if(s_chassis.drive_motor_ready == 0u) {
+        if(!s_chassis.drive_motor_ready) {
             log_info("CHASSIS drive motor ready");
         }
         s_drive_prepare_retry_countdown = 0u;
-        s_chassis.drive_motor_ready = 1u;
+        s_chassis.drive_motor_ready = true;
         s_last_drive_missing_mask = 0u;
     }
     else {
-        s_chassis.drive_motor_ready = 0u;
+        s_chassis.drive_motor_ready = false;
 
         if(drive_missing_mask != s_last_drive_missing_mask) {
             log_warn("CHASSIS drive feedback missing mask=0x%02X", drive_missing_mask);
@@ -965,7 +965,7 @@ static bool chassis_maintain_motor_startup(bool steer_feedback_observed, uint8_t
         }
     }
 
-    return s_chassis.steer_motor_ready != 0u && s_chassis.drive_motor_ready != 0u;
+    return s_chassis.steer_motor_ready && s_chassis.drive_motor_ready;
 }
 
 static float chassis_wheel_omega_to_drive_omega(float wheel_omega) {
@@ -1079,7 +1079,7 @@ static void chassis_resolve_brake_module_command(ChassisModule module, float tar
     }
 
     s_module_cmd[module].wheel_omega = 0.0f;
-    s_module_cmd[module].drive_inverted = 0u;
+    s_module_cmd[module].drive_inverted = false;
 }
 
 static void chassis_resolve_drive_module_command(ChassisModule module) {
@@ -1104,26 +1104,26 @@ static void chassis_resolve_drive_module_command(ChassisModule module) {
     error_a = option_a - current_angle;
     error_b = option_b - current_angle;
 
-    if(s_last_drive_inverted[module] != 0u) {
+    if(s_last_drive_inverted[module]) {
         if(fabsf(error_a) + CHASSIS_DRIVE_EQUIV_HYST_RAD < fabsf(error_b)) {
-            s_last_drive_inverted[module] = 0u;
+            s_last_drive_inverted[module] = false;
         }
     }
     else {
         if(fabsf(error_b) + CHASSIS_DRIVE_EQUIV_HYST_RAD < fabsf(error_a)) {
-            s_last_drive_inverted[module] = 1u;
+            s_last_drive_inverted[module] = true;
         }
     }
 
-    if(s_last_drive_inverted[module] != 0u) {
+    if(s_last_drive_inverted[module]) {
         s_module_cmd[module].steer_target_abs_angle = option_b;
         s_module_cmd[module].wheel_omega = -target_omega;
-        s_module_cmd[module].drive_inverted = 1u;
+        s_module_cmd[module].drive_inverted = true;
     }
     else {
         s_module_cmd[module].steer_target_abs_angle = option_a;
         s_module_cmd[module].wheel_omega = target_omega;
-        s_module_cmd[module].drive_inverted = 0u;
+        s_module_cmd[module].drive_inverted = false;
     }
 }
 
@@ -1133,7 +1133,7 @@ static void chassis_reset_steer_speed_profiles(void) {
     for(i = 0u; i < CHASSIS_MODULE_COUNT; ++i) {
         s_steer_speed_ramp_time[i] = 0.0f;
         s_steer_speed_last_target[i] = 0.0f;
-        s_steer_speed_initialized[i] = 0u;
+        s_steer_speed_initialized[i] = false;
     }
 }
 
@@ -1155,15 +1155,15 @@ static float chassis_calc_steer_track_speed(ChassisModule module, float target_a
     if(angle_error <= CHASSIS_DRIVE_ANGLE_TOL_RAD) {
         s_steer_speed_ramp_time[module] = 0.0f;
         s_steer_speed_last_target[module] = target_angle;
-        s_steer_speed_initialized[module] = 1u;
+        s_steer_speed_initialized[module] = true;
         return CHASSIS_STEER_TRACK_MIN_SPEED_RAD_S;
     }
 
     target_delta = target_angle - s_steer_speed_last_target[module];
-    if(s_steer_speed_initialized[module] == 0u || fabsf(target_delta) > CHASSIS_STEER_TARGET_CHANGE_RAD) {
+    if(!s_steer_speed_initialized[module] || fabsf(target_delta) > CHASSIS_STEER_TARGET_CHANGE_RAD) {
         s_steer_speed_ramp_time[module] = 0.0f;
         s_steer_speed_last_target[module] = target_angle;
-        s_steer_speed_initialized[module] = 1u;
+        s_steer_speed_initialized[module] = true;
     }
 
     s_steer_speed_ramp_time[module] += CHASSIS_CONTROL_PERIOD_S;

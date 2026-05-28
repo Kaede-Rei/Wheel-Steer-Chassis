@@ -11,11 +11,11 @@
  * @brief 姿态融合算法状态码
  */
 typedef enum {
-    IMU_ATTITUDE_STATUS_OK = 0,      /**< 操作成功 */
-    IMU_ATTITUDE_STATUS_ERROR,       /**< 通用错误 */
+    IMU_ATTITUDE_STATUS_OK = 0,         /**< 操作成功 */
+    IMU_ATTITUDE_STATUS_ERROR,          /**< 通用错误 */
     IMU_ATTITUDE_STATUS_INVALID_PARAM, /**< 参数无效 */
-    IMU_ATTITUDE_STATUS_CALIBRATING, /**< 正在进行陀螺零偏校准 */
-    IMU_ATTITUDE_STATUS_NOT_READY,   /**< 尚未得到可用姿态 */
+    IMU_ATTITUDE_STATUS_CALIBRATING,    /**< 正在进行陀螺零偏校准 */
+    IMU_ATTITUDE_STATUS_NOT_READY,      /**< 尚未得到可用姿态 */
 } ImuAttitudeStatus;
 
 /**
