@@ -140,22 +140,19 @@ static inline void entry_loop(void) {
     }
 
     if(delay_nb_ms(&log_task, 1000)) {
-        float gyro_temp_delta = 0.0f;
-
         temp = bmi088_get_temp();
         (void)bmi088_get_attitude_debug(&imu_debug);
 
-        if(imu_debug.gyro_temp_valid) {
-            gyro_temp_delta = imu_debug.temperature - imu_debug.gyro_temp_ref;
-        }
-
         float yaw = angle.yaw;
-        float temp_delta = gyro_temp_delta;
-        float bias = imu_debug.gyro_bias.z;
-        float temp_comp = imu_debug.gyro_temp_comp.z;
-        float corrected = imu_debug.gyro_corrected.z;
+        float gyro_raw_z = gyro.z;
+        float temp_ref = imu_debug.gyro_temp_ref;
+        float bias_start_z = imu_debug.gyro_bias.z;
+        float bias_a_z = imu_debug.gyro_z_temp_intercept;
+        float bias_eff_z = imu_debug.gyro_z_bias_effective;
+        float temp_comp_z = imu_debug.gyro_temp_comp.z;
+        float corrected_z = imu_debug.gyro_corrected.z;
 
-        log_vofa(yaw, bias, corrected, temp, temp_delta, temp_comp);
+        log_vofa(yaw, gyro_raw_z, bias_start_z, temp_ref, bias_a_z, bias_eff_z, temp_comp_z, corrected_z, temp);
     }
 }
 

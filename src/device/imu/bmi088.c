@@ -243,7 +243,7 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->accel_int_pin = accel_int_pin;
     config->gyro_int_pin = gyro_int_pin;
     config->attitude.mode = IMU_ATTITUDE_MAHONY_6AXIS;
-    config->attitude.gyro_calib_samples = 1000U;
+    config->attitude.gyro_calib_samples = 2000U;
     config->attitude.acc_norm = 9.80665f;
     config->attitude.acc_norm_tolerance = 1.5f;
     config->attitude.max_acc_age_us = 20000U;
@@ -254,7 +254,7 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->attitude.mahony_ki_z = 0.0f;
     config->attitude.gyro_x_temp_coeff = 0.0f;
     config->attitude.gyro_y_temp_coeff = 0.0f;
-    config->attitude.gyro_z_temp_coeff = 0.0000950025f;
+    config->attitude.gyro_z_temp_coeff = 0.000015f;
     config->attitude.zru_gyro_threshold = 0.015f;
     config->attitude.zru_min_static_us = 1200000U;
     config->attitude.zru_bias_gain = 0.12f;
@@ -309,6 +309,8 @@ float bmi088_get_temp(void) {
 }
 
 ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug) {
+    const ImuAttitude* attitude = &s_bmi088_attitude;
+
     if(debug == 0) {
         return IMU_STATUS_INVALID_PARAM;
     }
@@ -324,17 +326,17 @@ ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug) {
         return IMU_STATUS_UNSUPPORTED;
     }
 
-    debug->gyro_temp_ref = s_bmi088_attitude.gyro_temp_ref;
-    debug->gyro_temp_count = s_bmi088_attitude.gyro_temp_count;
-    debug->gyro_temp_valid = s_bmi088_attitude.gyro_temp_valid;
-    debug->gyro_bias = s_bmi088_attitude.gyro_bias;
-    debug->gyro_corrected = s_bmi088_attitude.gyro_filtered;
+    debug->gyro_temp_ref = attitude->gyro_temp_ref;
+    debug->gyro_bias = attitude->gyro_bias;
+    debug->gyro_corrected = attitude->gyro_filtered;
     debug->gyro_temp_comp = bmi088_calc_gyro_temp_comp();
-    debug->gyro_temp_coeff.x = s_bmi088_attitude.config.gyro_x_temp_coeff;
-    debug->gyro_temp_coeff.y = s_bmi088_attitude.config.gyro_y_temp_coeff;
-    debug->gyro_temp_coeff.z = s_bmi088_attitude.config.gyro_z_temp_coeff;
-    debug->zru_enabled = s_bmi088_attitude.zru_enabled;
-    debug->zru_active = s_bmi088_attitude.zru_active;
+    debug->gyro_z_temp_intercept = attitude->gyro_z_temp_intercept;
+    debug->gyro_z_bias_effective = attitude->gyro_z_bias_effective;
+    debug->gyro_temp_coeff.x = attitude->config.gyro_x_temp_coeff;
+    debug->gyro_temp_coeff.y = attitude->config.gyro_y_temp_coeff;
+    debug->gyro_temp_coeff.z = attitude->config.gyro_z_temp_coeff;
+    debug->zru_enabled = attitude->zru_enabled;
+    debug->zru_active = attitude->zru_active;
 
     return IMU_STATUS_OK;
 }
@@ -549,7 +551,6 @@ static ImuGyro bmi088_get_gyro_corrected(void) {
     }
 
     (void)imu_attitude_get_gyro_corrected(&s_bmi088_attitude, &gyro_corrected);
-
     return gyro_corrected;
 }
 
@@ -990,7 +991,6 @@ static void bmi088_attitude_init(const ImuAttitudeConfig* config) {
 }
 
 static void bmi088_attitude_update(void) {
-    ImuSample sample = { 0 };
     ImuAttitudeStatus status = IMU_ATTITUDE_STATUS_OK;
 
     if(!s_bmi088_attitude_enabled) {
@@ -1001,8 +1001,7 @@ static void bmi088_attitude_update(void) {
         return;
     }
 
-    sample = s_bmi088_sample;
-    status = imu_attitude_update(&s_bmi088_attitude, &sample);
+    status = imu_attitude_update(&s_bmi088_attitude, &s_bmi088_sample);
     if(status == IMU_ATTITUDE_STATUS_OK ||
         (status == IMU_ATTITUDE_STATUS_CALIBRATING && s_bmi088_attitude.has_angle != 0U)) {
         (void)imu_attitude_get_angle(&s_bmi088_attitude, &s_bmi088_angle);
@@ -1308,17 +1307,15 @@ static void bmi088_update_temp_cache(uint32_t now_us, uint8_t* sample_flags) {
 
 static ImuGyro bmi088_calc_gyro_temp_comp(void) {
     ImuGyro gyro_temp_comp = { 0.0f, 0.0f, 0.0f };
-    float delta_temp = 0.0f;
 
-    if(!s_bmi088_attitude_enabled || !s_bmi088_attitude.gyro_temp_valid ||
-        (s_bmi088_sample.flags & IMU_SAMPLE_TEMP_VALID) == 0U) {
+    if(!s_bmi088_attitude_enabled || (s_bmi088_sample.flags & IMU_SAMPLE_TEMP_VALID) == 0U) {
         return gyro_temp_comp;
     }
 
-    delta_temp = s_bmi088_sample.temperature - s_bmi088_attitude.gyro_temp_ref;
-    gyro_temp_comp.x = s_bmi088_attitude.config.gyro_x_temp_coeff * delta_temp;
-    gyro_temp_comp.y = s_bmi088_attitude.config.gyro_y_temp_coeff * delta_temp;
-    gyro_temp_comp.z = s_bmi088_attitude.config.gyro_z_temp_coeff * delta_temp;
+    gyro_temp_comp.x = s_bmi088_attitude.config.gyro_x_temp_coeff * s_bmi088_sample.temperature;
+    gyro_temp_comp.y = s_bmi088_attitude.config.gyro_y_temp_coeff * s_bmi088_sample.temperature;
+    gyro_temp_comp.z = s_bmi088_attitude.config.gyro_z_temp_coeff * s_bmi088_sample.temperature;
+
     return gyro_temp_comp;
 }
 

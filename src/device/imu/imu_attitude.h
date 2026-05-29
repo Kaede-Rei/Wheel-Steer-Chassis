@@ -55,9 +55,11 @@ typedef struct {
     bool acc_trusted;         /**< true 表示最近一次融合时加速度被认为可信 */
 
     float gyro_temp_ref;      /**< 启动标定时的参考温度，单位 ℃ */
-    float gyro_temp_sum;      /**< 启动校准阶段的陀螺温度累加值，用于温度补偿 */
+    float gyro_temp_sum;      /**< 启动校准阶段的温度累加值 */
     uint16_t gyro_temp_count; /**< 启动校准阶段累计到的有效温度样本数 */
-    bool gyro_temp_valid;     /**< true 表示 gyro_temp_ref 有效，且温度补偿可用 */
+    bool gyro_temp_valid;     /**< true 表示 gyro_temp_ref 有效 */
+    float gyro_z_temp_intercept; /**< z 轴 bias 线性模型截距 */
+    float gyro_z_bias_effective; /**< 当前实际用于扣除的 z 轴 bias */
 
     uint32_t zru_static_time_us; /**< 连续满足静止条件的累计时长，单位 us */
     bool zru_enabled;           /**< true 表示允许执行静止 ZRU */

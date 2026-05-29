@@ -67,12 +67,12 @@ typedef struct {
  */
 typedef struct {
     float temperature;         /**< 当前缓存温度，单位 ℃ */
-    float gyro_temp_ref;       /**< 静态标定得到的参考温度，单位 ℃ */
-    uint16_t gyro_temp_count;  /**< 静态标定阶段累计的有效温度样本数 */
-    bool gyro_temp_valid;      /**< true 表示参考温度有效 */
+    float gyro_temp_ref;       /**< 启动标定时的参考温度，单位 ℃ */
     ImuGyro gyro_bias;         /**< 当前陀螺零偏估计，单位 rad/s */
     ImuGyro gyro_corrected;    /**< 当前零偏+温漂补偿后的角速度，单位 rad/s */
     ImuGyro gyro_temp_comp;    /**< 当前三轴温漂补偿量，单位 rad/s */
+    float gyro_z_temp_intercept; /**< z 轴 bias 线性模型截距 */
+    float gyro_z_bias_effective; /**< 当前实际用于扣除的 z 轴 bias */
     ImuGyro gyro_temp_coeff;   /**< 当前三轴温漂补偿系数，单位 rad/s/℃ */
     bool zru_enabled;          /**< true 表示当前允许执行静止 ZRU */
     bool zru_active;           /**< true 表示当前已进入静止 ZRU 修正 */
