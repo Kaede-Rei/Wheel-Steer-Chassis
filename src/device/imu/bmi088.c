@@ -254,7 +254,9 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->attitude.mahony_ki_z = 0.0f;
     config->attitude.gyro_x_temp_coeff = 0.0f;
     config->attitude.gyro_y_temp_coeff = 0.0f;
-    config->attitude.gyro_z_temp_coeff = 0.000015f;
+    config->attitude.gyro_z_temp_coeff = 0.000034f;
+    config->attitude.gyro_z_bias_offset = 0.00078f;
+    config->attitude.gyro_z_bias_temp_coeff = -0.000023f;
     config->attitude.zru_gyro_threshold = 0.015f;
     config->attitude.zru_min_static_us = 1200000U;
     config->attitude.zru_bias_gain = 0.12f;
@@ -1314,7 +1316,9 @@ static ImuGyro bmi088_calc_gyro_temp_comp(void) {
 
     gyro_temp_comp.x = s_bmi088_attitude.config.gyro_x_temp_coeff * s_bmi088_sample.temperature;
     gyro_temp_comp.y = s_bmi088_attitude.config.gyro_y_temp_coeff * s_bmi088_sample.temperature;
-    gyro_temp_comp.z = s_bmi088_attitude.config.gyro_z_temp_coeff * s_bmi088_sample.temperature;
+    gyro_temp_comp.z =
+        s_bmi088_attitude.gyro_z_bias_effective -
+        s_bmi088_attitude.gyro_bias.z;
 
     return gyro_temp_comp;
 }

@@ -23,6 +23,7 @@ static void imu_attitude_integrate_calibrating_yaw(ImuAttitude* attitude, const 
 static void imu_attitude_reset_calibration(ImuAttitude* attitude);
 static ImuAttitudeStatus imu_attitude_calibrate_gyro(ImuAttitude* attitude, const ImuSample* sample);
 static ImuGyro imu_attitude_get_temp_comp(const ImuAttitude* attitude, const ImuSample* sample);
+static float imu_attitude_get_z_bias_offset(const ImuAttitude* attitude);
 static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuSample* sample);
 static bool imu_attitude_is_static_candidate(const ImuAttitude* attitude, const ImuGyro* gyro);
 static void imu_attitude_apply_zru(ImuAttitude* attitude, ImuGyro* gyro, float dt);
@@ -405,6 +406,7 @@ static ImuAttitudeStatus imu_attitude_calibrate_gyro(ImuAttitude* attitude, cons
     float mean_x = 0.0f;
     float mean_y = 0.0f;
     float mean_z = 0.0f;
+    float z_bias_offset = 0.0f;
     float var_x = 0.0f;
     float var_y = 0.0f;
     float var_z = 0.0f;
@@ -487,8 +489,10 @@ static ImuAttitudeStatus imu_attitude_calibrate_gyro(ImuAttitude* attitude, cons
     if(attitude->gyro_temp_count > 0U) {
         attitude->gyro_temp_ref = attitude->gyro_temp_sum / (float)attitude->gyro_temp_count;
         attitude->gyro_temp_valid = true;
+        z_bias_offset = imu_attitude_get_z_bias_offset(attitude);
         attitude->gyro_z_temp_intercept =
-            mean_z - attitude->config.gyro_z_temp_coeff * attitude->gyro_temp_ref;
+            mean_z + z_bias_offset -
+            attitude->config.gyro_z_temp_coeff * attitude->gyro_temp_ref;
     }
 
     attitude->calibrated = true;
@@ -516,6 +520,23 @@ static ImuGyro imu_attitude_get_temp_comp(const ImuAttitude* attitude, const Imu
     temp_comp.y = attitude->config.gyro_y_temp_coeff * sample->temperature;
     temp_comp.z = attitude->config.gyro_z_temp_coeff * sample->temperature;
     return temp_comp;
+}
+
+static float imu_attitude_get_z_bias_offset(const ImuAttitude* attitude) {
+    float bias_offset = 0.0f;
+
+    if(attitude == 0 || !attitude->gyro_temp_valid) {
+        return bias_offset;
+    }
+
+    bias_offset = attitude->config.gyro_z_bias_offset +
+        attitude->config.gyro_z_bias_temp_coeff * attitude->gyro_temp_ref;
+
+    if(bias_offset < 0.0f) {
+        bias_offset = 0.0f;
+    }
+
+    return bias_offset;
 }
 
 static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuSample* sample) {
