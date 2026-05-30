@@ -24,6 +24,7 @@ static void imu_attitude_reset_calibration(ImuAttitude* attitude);
 static ImuAttitudeStatus imu_attitude_calibrate_gyro(ImuAttitude* attitude, const ImuSample* sample);
 static ImuGyro imu_attitude_get_temp_comp(const ImuAttitude* attitude, const ImuSample* sample);
 static float imu_attitude_get_z_bias_offset(const ImuAttitude* attitude);
+static bool imu_attitude_z_bias_model_enabled(const ImuAttitude* attitude);
 static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuSample* sample);
 static bool imu_attitude_is_static_candidate(const ImuAttitude* attitude, const ImuGyro* gyro);
 static void imu_attitude_apply_zru(ImuAttitude* attitude, ImuGyro* gyro, float dt);
@@ -484,16 +485,17 @@ static ImuAttitudeStatus imu_attitude_calibrate_gyro(ImuAttitude* attitude, cons
     attitude->gyro_bias.x = mean_x;
     attitude->gyro_bias.y = mean_y;
     attitude->gyro_bias.z = mean_z;
-    attitude->gyro_z_temp_intercept = mean_z;
-    attitude->gyro_z_bias_effective = mean_z;
+    attitude->gyro_z_temp_intercept = 0.0f;
+    attitude->gyro_z_bias_effective = 0.0f;
     if(attitude->gyro_temp_count > 0U) {
         attitude->gyro_temp_ref = attitude->gyro_temp_sum / (float)attitude->gyro_temp_count;
         attitude->gyro_temp_valid = true;
-        z_bias_offset = imu_attitude_get_z_bias_offset(attitude);
-        attitude->gyro_z_temp_intercept =
-            mean_z + z_bias_offset -
-            attitude->config.gyro_z_temp_coeff * attitude->gyro_temp_ref;
     }
+
+    // z 轴补偿基线只取配置值，不再依赖本次启动测得的 mean_z 或 temp_ref。
+    z_bias_offset = imu_attitude_get_z_bias_offset(attitude);
+    attitude->gyro_z_temp_intercept = z_bias_offset;
+    attitude->gyro_z_bias_effective = z_bias_offset;
 
     attitude->calibrated = true;
     attitude->last_update_us = sample->gyro_timestamp_us;
@@ -523,20 +525,20 @@ static ImuGyro imu_attitude_get_temp_comp(const ImuAttitude* attitude, const Imu
 }
 
 static float imu_attitude_get_z_bias_offset(const ImuAttitude* attitude) {
-    float bias_offset = 0.0f;
-
-    if(attitude == 0 || !attitude->gyro_temp_valid) {
-        return bias_offset;
+    if(attitude == 0) {
+        return 0.0f;
     }
 
-    bias_offset = attitude->config.gyro_z_bias_offset +
-        attitude->config.gyro_z_bias_temp_coeff * attitude->gyro_temp_ref;
+    return attitude->config.gyro_z_bias_offset;
+}
 
-    if(bias_offset < 0.0f) {
-        bias_offset = 0.0f;
+static bool imu_attitude_z_bias_model_enabled(const ImuAttitude* attitude) {
+    if(attitude == 0) {
+        return false;
     }
 
-    return bias_offset;
+    return attitude->config.gyro_z_temp_coeff != 0.0f ||
+        attitude->config.gyro_z_bias_offset != 0.0f;
 }
 
 static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuSample* sample) {
@@ -550,7 +552,8 @@ static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuS
 
     temp_comp = imu_attitude_get_temp_comp(attitude, sample);
     bias_z = attitude->gyro_bias.z;
-    if(attitude->gyro_temp_valid && (sample->flags & IMU_SAMPLE_TEMP_VALID) != 0U) {
+    if(imu_attitude_z_bias_model_enabled(attitude)) {
+        // 固定 z 轴 bias + 当前温度斜率，不使用启动时的 bias/temp_ref 参与补偿。
         bias_z = attitude->gyro_z_temp_intercept + temp_comp.z;
     }
 
@@ -596,8 +599,9 @@ static void imu_attitude_apply_zru(ImuAttitude* attitude, ImuGyro* gyro, float d
         return;
     }
 
-    if(attitude->gyro_temp_valid && attitude->config.gyro_z_temp_coeff != 0.0f) {
+    if(imu_attitude_z_bias_model_enabled(attitude)) {
         attitude->gyro_z_temp_intercept += gyro->z * attitude->config.zru_bias_gain * dt;
+        attitude->gyro_z_bias_effective = attitude->gyro_z_temp_intercept;
     }
     else {
         attitude->gyro_bias.z += gyro->z * attitude->config.zru_bias_gain * dt;
@@ -705,8 +709,9 @@ static void imu_attitude_update_mahony(ImuAttitude* attitude, const ImuSample* s
 
         attitude->gyro_bias.x += attitude->config.mahony_ki * ex * dt;
         attitude->gyro_bias.y += attitude->config.mahony_ki * ey * dt;
-        if(attitude->gyro_temp_valid && attitude->config.gyro_z_temp_coeff != 0.0f) {
+        if(imu_attitude_z_bias_model_enabled(attitude)) {
             attitude->gyro_z_temp_intercept += attitude->config.mahony_ki_z * ez * dt;
+            attitude->gyro_z_bias_effective = attitude->gyro_z_temp_intercept;
         }
         else {
             attitude->gyro_bias.z += attitude->config.mahony_ki_z * ez * dt;

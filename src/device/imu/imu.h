@@ -118,9 +118,9 @@ typedef struct {
 
     float gyro_x_temp_coeff;    /**< 角速度 x 轴温度补偿系数，单位 rad/s/℃；0 表示不启用温度补偿 */
     float gyro_y_temp_coeff;    /**< 角速度 y 轴温度补偿系数，单位 rad/s/℃；0 表示不启用温度补偿 */
-    float gyro_z_temp_coeff;    /**< 角速度 z 轴温度补偿系数，单位 rad/s/℃；0 表示不启用温度补偿 */
-    float gyro_z_bias_offset;   /**< z 轴启动 bias 偏置基值，单位 rad/s */
-    float gyro_z_bias_temp_coeff; /**< z 轴启动 bias 偏置随 temp_ref 的系数，单位 rad/s/℃ */
+    float gyro_z_temp_coeff;    /**< 角速度 z 轴温度补偿系数，单位 rad/s/℃；与当前温度直接相乘 */
+    float gyro_z_bias_offset;   /**< z 轴固定 bias 截距，单位 rad/s */
+    float gyro_z_bias_temp_coeff; /**< 兼容保留字段；当前实现不再使用启动 temp_ref 参与 z 轴补偿 */
 
     float zru_gyro_threshold;   /**< 静止 ZRU 的三轴角速度阈值，单位 rad/s；<=0 表示关闭 ZRU */
     uint32_t zru_min_static_us; /**< 触发 ZRU 前要求连续静止的最短时间，单位 us */
