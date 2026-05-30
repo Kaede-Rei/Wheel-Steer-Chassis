@@ -34,6 +34,12 @@ typedef struct {
     uint16_t time_ms;
 } ZhongLingServoPwmCmd;
 
+typedef struct {
+    uint8_t id;
+    float pos_rad;
+    float spd_rad_s;
+} ZhongLingServoPosSpdCmd;
+
 /**
  * @brief 众灵舵机初始化配置
  *
@@ -97,6 +103,12 @@ typedef struct {
      * @param count 指令数量, 最大为 255
      */
     BusServoStatus(*set_multi_pwm_time)(const ZhongLingServoPwmCmd* cmds, size_t count);
+    /**
+     * @brief 批量设置多个舵机的位置和速度
+     * @param cmds 指令数组
+     * @param count 指令数量, 最大为 255
+     */
+    BusServoStatus(*set_multi_pos_spd)(const ZhongLingServoPosSpdCmd* cmds, size_t count);
 } ZhongLingServoInterface;
 
 extern const BusServoInterface zhong_ling_servo_common_instance;

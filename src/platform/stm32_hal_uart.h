@@ -22,6 +22,8 @@ extern UART_HandleTypeDef huart1;
  */
 extern UART_HandleTypeDef huart5;
 
+extern UART_HandleTypeDef huart7;
+
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
 
 /**
@@ -39,6 +41,8 @@ bool uart1_write(const char* data, uint32_t len);
  * @return bool `true` 表示发送完成
  */
 bool uart1_write_blocking(const char* data, uint32_t len);
+
+bool uart7_write_blocking(const char* data, uint32_t len);
 
 /**
  * @brief 启动 UART 中断接收

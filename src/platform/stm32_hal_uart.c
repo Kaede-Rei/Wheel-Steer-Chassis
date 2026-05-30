@@ -59,6 +59,14 @@ bool uart1_write_blocking(const char* data, uint32_t len) {
     return HAL_UART_Transmit(&huart1, (uint8_t*)data, (uint16_t)len, HAL_MAX_DELAY) == HAL_OK;
 }
 
+bool uart7_write_blocking(const char* data, uint32_t len) {
+    if(data == NULL || len == 0 || len > UINT16_MAX) {
+        return false;
+    }
+
+    return HAL_UART_Transmit(&huart7, (uint8_t*)data, (uint16_t)len, HAL_MAX_DELAY) == HAL_OK;
+}
+
 /**
  * @brief 启动 UART 中断接收
  * @param huart UART 句柄

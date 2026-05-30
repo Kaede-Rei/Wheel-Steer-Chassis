@@ -54,6 +54,7 @@ static BusServoStatus zl_stop_one(uint8_t id);
 static BusServoStatus zl_set_deviation(uint8_t id, int16_t deviation);
 static BusServoStatus zl_set_pwm_time(uint8_t id, uint16_t pwm, uint16_t time_ms);
 static BusServoStatus zl_set_multi_pwm_time(const ZhongLingServoPwmCmd* cmds, size_t count);
+static BusServoStatus zl_set_multi_pos_spd(const ZhongLingServoPosSpdCmd* cmds, size_t count);
 
 static BusServoStatus validate_initialized(void);
 static bool is_valid_id(uint8_t id);
@@ -88,6 +89,7 @@ static const ZhongLingServoInterface s_zhong_ling_servo_feature_instance = {
     .set_deviation = zl_set_deviation,
     .set_pwm_time = zl_set_pwm_time,
     .set_multi_pwm_time = zl_set_multi_pwm_time,
+    .set_multi_pos_spd = zl_set_multi_pos_spd,
 };
 
 const ZhongLingServoInterface* zhong_ling_servo_instance = &s_zhong_ling_servo_feature_instance;
@@ -341,6 +343,49 @@ static BusServoStatus zl_set_multi_pwm_time(const ZhongLingServoPwmCmd* cmds, si
 
         pwm = clamp_u16_range(cmds[i].pwm, ZHONG_LING_SERVO_PWM_MIN, ZHONG_LING_SERVO_PWM_MAX);
         time_ms = clamp_u16_range(cmds[i].time_ms, 0u, ZHONG_LING_SERVO_TIME_MS_MAX);
+
+        written = snprintf(&cmd[offset], sizeof(cmd) - offset, "#%03uP%04uT%04u!",
+            (unsigned int)cmds[i].id,
+            (unsigned int)pwm,
+            (unsigned int)time_ms);
+        if(written <= 0 || (size_t)written >= (sizeof(cmd) - offset)) {
+            return SERVO_STATUS_BUFFER_TOO_SMALL;
+        }
+        offset += (size_t)written;
+    }
+
+    if(offset >= (sizeof(cmd) - 1u)) {
+        return SERVO_STATUS_BUFFER_TOO_SMALL;
+    }
+
+    cmd[offset++] = '}';
+    cmd[offset] = '\0';
+    return write_ascii(cmd, offset);
+}
+
+static BusServoStatus zl_set_multi_pos_spd(const ZhongLingServoPosSpdCmd* cmds, size_t count) {
+    char cmd[ZHONG_LING_SERVO_MULTI_CMD_BUF_LEN];
+    size_t offset = 0u;
+    size_t i;
+
+    if(cmds == 0 || count == 0u) {
+        return SERVO_STATUS_INVALID_PARAM;
+    }
+
+    cmd[offset++] = '{';
+    for(i = 0u; i < count; i++) {
+        int written;
+        uint16_t pwm;
+        uint16_t time_ms;
+        float target_position;
+
+        if(is_valid_id(cmds[i].id) == false) {
+            return SERVO_STATUS_INVALID_PARAM;
+        }
+
+        target_position = clampf_range(cmds[i].pos_rad, s_ctx.config.pos_min_rad, s_ctx.config.pos_max_rad);
+        pwm = position_to_pwm(target_position);
+        time_ms = velocity_to_time_ms(cmds[i].id, target_position, cmds[i].spd_rad_s);
 
         written = snprintf(&cmd[offset], sizeof(cmd) - offset, "#%03uP%04uT%04u!",
             (unsigned int)cmds[i].id,

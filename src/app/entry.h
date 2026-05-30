@@ -86,6 +86,10 @@ static inline void entry_init(void) {
     log_info("BOOT tim6 500hz init step done");
     delay_ms(100);
 
+    if(assemble_arm() != SYSTEM_STATUS_OK) return;
+    log_info("BOOT arm init step done");
+    delay_ms(100);
+
     log_info("System initialized successfully");
     delay_ms(500);
 }
