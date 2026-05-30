@@ -1,4 +1,4 @@
-#include "six_dof_arm_kine.h"
+#include "serial_arm/six_dof_arm_kine.h"
 
 #include <math.h>
 #include <string.h>
