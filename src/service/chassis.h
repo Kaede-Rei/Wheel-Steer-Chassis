@@ -77,6 +77,13 @@ typedef enum {
 } ChassisModule;
 #undef X
 
+typedef struct {
+    bool enabled;
+    float k_vx;
+    float k_vy;
+    float v_deadband;
+} ChassisYawBiasConfig;
+
 /**
  * @brief 底盘服务初始化配置
  * @param steer_motor_interface 转向电机抽象接口实例
@@ -98,6 +105,7 @@ typedef struct {
     SteerWheelModel model;
     float wheel_drive_ratio;
     ChassisSteerTargetMode steer_target_mode;
+    ChassisYawBiasConfig yaw_bias;
 } ChassisConfig;
 
 /**

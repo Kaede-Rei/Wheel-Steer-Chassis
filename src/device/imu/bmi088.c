@@ -263,9 +263,9 @@ ImuStatus bmi088_make_config(Bmi088Config* config, const Bmi088PortOps* ops, con
     config->attitude.gyro_z_bias_offset = 0.00090f;
     config->attitude.gyro_z_bias_temp_coeff = 0.0f;
 
-    config->attitude.zru_gyro_threshold = 0.015f;
-    config->attitude.zru_min_static_us = 1200000U;
-    config->attitude.zru_bias_gain = 0.12f;
+    config->attitude.zru_gyro_threshold = 0.0f;
+    config->attitude.zru_min_static_us = 0U;
+    config->attitude.zru_bias_gain = 0.0f;
 
     return IMU_STATUS_OK;
 }
@@ -350,6 +350,8 @@ ImuStatus bmi088_get_attitude_debug(Bmi088AttitudeDebug* debug) {
 }
 
 ImuStatus bmi088_set_zru_enabled(bool enabled) {
+    (void)enabled;
+
     if(!s_bmi088_is_initialized) {
         return IMU_STATUS_NOT_INITIALIZE;
     }
@@ -358,7 +360,7 @@ ImuStatus bmi088_set_zru_enabled(bool enabled) {
         return IMU_STATUS_UNSUPPORTED;
     }
 
-    s_bmi088_attitude.zru_enabled = enabled;
+    s_bmi088_attitude.zru_enabled = false;
     s_bmi088_attitude.zru_active = false;
     s_bmi088_attitude.zru_static_time_us = 0U;
     return IMU_STATUS_OK;
@@ -369,7 +371,7 @@ bool bmi088_is_zru_enabled(void) {
         return false;
     }
 
-    return s_bmi088_attitude.zru_enabled;
+    return false;
 }
 
 /**

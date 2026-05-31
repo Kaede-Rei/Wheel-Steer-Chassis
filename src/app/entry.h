@@ -3,23 +3,19 @@
 
 // ! system ! //
 #include <stdbool.h>
-#include <math.h>
-
 
 
 // ! app ! //
-
+#include "remote.h"
 
 
 // ! service ! //
 #include "assemble/assemble.h"
 #include "chassis.h"
 #include "chassis_yaw_hold.h"
-#include "remote.h"
 
 // ! device ! //
 #include "imu/imu.h"
-#include "imu/bmi088.h"
 #include "rgb_led/rgb_led.h"
 #include "gw_gray.h"
 
@@ -44,7 +40,7 @@ static ImuGyro gyro = { 0.0f, 0.0f, 0.0f };
 static ImuGyro gyro_bias = { 0.0f, 0.0f, 0.0f };
 static ImuGyro gyro_corrected = { 0.0f, 0.0f, 0.0f };
 static ImuAngle angle = { 0.0f, 0.0f, 0.0f };
-static uint8_t remote = 0;
+static uint8_t remote_tick = 0;
 static uint8_t led_state = 0u;
 
 // ! ========================= 接 口 函 数 声 明 ========================= ! //
@@ -81,13 +77,16 @@ static inline void entry_init(void) {
     log_info("BOOT remote init step done");
     delay_ms(100);
 
+    remote_init();
+    chassis_yaw_hold_set_target(0.0f);
+
     if(assemble_tim6_500hz() != SYSTEM_STATUS_OK) return;
     log_info("BOOT tim6 500hz init step done");
     delay_ms(100);
 
-    // if(assemble_arm() != SYSTEM_STATUS_OK) return;
-    // log_info("BOOT arm init step done");
-    // delay_ms(100);
+    if(assemble_arm() != SYSTEM_STATUS_OK) return;
+    log_info("BOOT arm init step done");
+    delay_ms(100);
 
     log_info("System initialized successfully");
     delay_ms(500);
@@ -114,9 +113,9 @@ static inline void entry_loop(void) {
 
         chassis.process();
 
-        if(remote++ % 5 == 0) {
+        if(remote_tick++ % 5 == 0) {
             remote_process();
-            remote = 0;
+            remote_tick = 0;
 
             gw_gray_update();
         }
@@ -143,8 +142,18 @@ static inline void entry_loop(void) {
     if(delay_nb_ms(&log_task, 1000)) {
         float yaw_hold_target_deg = chassis_yaw_hold_get_yaw_ref() * 57.2957795f;
         float current_yaw_deg = angle.yaw * 57.2957795f;
+        float yaw_hold_error_deg = chassis_yaw_hold_get_yaw_error() * 57.2957795f;
+        float yaw_hold_output_wz_deg_s = chassis_yaw_hold_get_output_wz() * 57.2957795f;
+        float gyro_z_deg_s = gyro_corrected.z * 57.2957795f;
+        bool yaw_hold_active = chassis_yaw_hold_is_active();
 
-        log_vofa(yaw_hold_target_deg, current_yaw_deg);
+        log_vofa(
+            yaw_hold_target_deg,
+            current_yaw_deg,
+            yaw_hold_error_deg,
+            yaw_hold_output_wz_deg_s,
+            gyro_z_deg_s,
+            yaw_hold_active);
     }
 }
 

@@ -47,7 +47,13 @@ SystemStatus assemble_chassis(void) {
             .max_wheel_linear_speed = 2.0f
         },
         .wheel_drive_ratio = 1.0f,
-        .steer_target_mode = CHASSIS_STEER_TARGET_ABS_NEAREST
+        .steer_target_mode = CHASSIS_STEER_TARGET_ABS_NEAREST,
+        .yaw_bias = {
+            .enabled = true,
+            .k_vx = 0.042f,
+            .k_vy = 0.028f,
+            .v_deadband = 0.01f,
+        }
     };
 
     log_info("CHASSIS assemble begin");

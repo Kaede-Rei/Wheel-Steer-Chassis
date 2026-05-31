@@ -381,6 +381,26 @@ static void chassis_external_to_internal_twist(float vx_ext, float vy_ext, float
 static void chassis_internal_to_external_twist(float vx_int, float vy_int, float wz_int, float* vx_ext, float* vy_ext, float* wz_ext);
 
 /**
+ * @brief 计算外部速度命令引起的理论偏航角误差补偿
+ *
+ * 该函数实现了一个简单的线性偏航补偿模型；
+ * 通过调整目标角速度来抵消由于线速度引起的转向偏差
+ *
+ * @param vx_ext 外部坐标系 x 方向线速度
+ * @param vy_ext 外部坐标系 y 方向线速度
+ * @return float 需要补偿的偏航角误差，单位 rad/s
+ */
+static float chassis_calc_yaw_bias_ext(float vx_ext, float vy_ext);
+
+/**
+ * @brief 将底盘内部状态同步到对外快照
+ *
+ * 该函数会将内部控制过程中维护的状态转换并复制到只读快照；
+ * 上层查询接口会直接返回该快照中的数据
+ */
+static void chassis_sync_view(void);
+
+/**
  * @brief 将角度归一化到 (-pi, pi] 区间
  *
  * 单位为 rad；
@@ -598,14 +618,16 @@ ChassisErrorCode chassis_init(const ChassisConfig* config) {
  * @return ChassisErrorCode 状态码
  */
 ChassisErrorCode chassis_set_velocity(float vx, float vy, float wz) {
+    float wz_for_ik;
+
     if(!s_chassis.initialized) {
         return ch.NOT_INITIALIZED;
     }
 
     s_chassis.brake_requested = false;
     s_chassis.brake_latched = false;
-    chassis_external_to_internal_twist(vx, vy, wz,
-        &s_chassis.kine.control.vx, &s_chassis.kine.control.vy, &s_chassis.kine.control.wz);
+    wz_for_ik = wz - chassis_calc_yaw_bias_ext(vx, vy);
+    chassis_external_to_internal_twist(vx, vy, wz_for_ik, &s_chassis.kine.control.vx, &s_chassis.kine.control.vy, &s_chassis.kine.control.wz);
 
     return ch.OK;
 }
@@ -657,7 +679,7 @@ ChassisErrorCode chassis_process(void) {
         s_chassis.kine.state.cur_vx = 0.0f;
         s_chassis.kine.state.cur_vy = 0.0f;
         s_chassis.kine.state.cur_wz = 0.0f;
-        s_chassis_view = s_chassis;
+        chassis_sync_view();
         return ch.OK;
     }
 
@@ -736,9 +758,7 @@ ChassisErrorCode chassis_process(void) {
         }
     }
 
-    s_chassis_view = s_chassis;
-    chassis_internal_to_external_twist(s_chassis.kine.state.cur_vx, s_chassis.kine.state.cur_vy, s_chassis.kine.state.cur_wz,
-        &s_chassis_view.kine.state.cur_vx, &s_chassis_view.kine.state.cur_vy, &s_chassis_view.kine.state.cur_wz);
+    chassis_sync_view();
 
     return ch.OK;
 }
@@ -986,6 +1006,39 @@ static void chassis_internal_to_external_twist(float vx_int, float vy_int, float
     if(vx_ext != NULL) *vx_ext = vx_int;
     if(vy_ext != NULL) *vy_ext = -vy_int;
     if(wz_ext != NULL) *wz_ext = -wz_int;
+}
+
+static float chassis_calc_yaw_bias_ext(float vx_ext, float vy_ext) {
+    const ChassisYawBiasConfig* bias = &s_chassis.config.yaw_bias;
+
+    if(!bias->enabled) {
+        return 0.0f;
+    }
+
+    if(fabsf(vx_ext) <= bias->v_deadband && fabsf(vy_ext) <= bias->v_deadband) {
+        return 0.0f;
+    }
+
+    return bias->k_vx * vx_ext - bias->k_vy * vy_ext;
+}
+
+static void chassis_sync_view(void) {
+    float vx_ext = 0.0f;
+    float vy_ext = 0.0f;
+    float wz_fk_raw_ext = 0.0f;
+
+    s_chassis_view = s_chassis;
+    chassis_internal_to_external_twist(
+        s_chassis.kine.state.cur_vx,
+        s_chassis.kine.state.cur_vy,
+        s_chassis.kine.state.cur_wz,
+        &vx_ext,
+        &vy_ext,
+        &wz_fk_raw_ext);
+
+    s_chassis_view.kine.state.cur_vx = vx_ext;
+    s_chassis_view.kine.state.cur_vy = vy_ext;
+    s_chassis_view.kine.state.cur_wz = wz_fk_raw_ext + chassis_calc_yaw_bias_ext(vx_ext, vy_ext);
 }
 
 static float chassis_wrap_pi(float angle) {

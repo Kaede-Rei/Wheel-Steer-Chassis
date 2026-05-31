@@ -26,8 +26,6 @@ static ImuGyro imu_attitude_get_temp_comp(const ImuAttitude* attitude, const Imu
 static float imu_attitude_get_z_bias_offset(const ImuAttitude* attitude);
 static bool imu_attitude_z_bias_model_enabled(const ImuAttitude* attitude);
 static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuSample* sample);
-static bool imu_attitude_is_static_candidate(const ImuAttitude* attitude, const ImuGyro* gyro);
-static void imu_attitude_apply_zru(ImuAttitude* attitude, ImuGyro* gyro, float dt);
 static void imu_attitude_update_complementary(ImuAttitude* attitude, const ImuSample* sample, float dt);
 static void imu_attitude_update_mahony(ImuAttitude* attitude, const ImuSample* sample, float dt);
 
@@ -41,7 +39,7 @@ ImuAttitudeStatus imu_attitude_init(ImuAttitude* attitude, const ImuAttitudeConf
     memset(attitude, 0, sizeof(ImuAttitude));
     attitude->config = *config;
     attitude->quat.w = 1.0f;
-    attitude->zru_enabled = true;
+    attitude->zru_enabled = false;
 
     if(config->gyro_calib_samples == 0U) {
         attitude->calibrated = true;
@@ -562,53 +560,6 @@ static ImuGyro imu_attitude_get_corrected_gyro(ImuAttitude* attitude, const ImuS
     return gyro;
 }
 
-static bool imu_attitude_is_static_candidate(const ImuAttitude* attitude, const ImuGyro* gyro) {
-    float threshold = 0.0f;
-
-    if(attitude == 0 || gyro == 0) {
-        return false;
-    }
-
-    threshold = attitude->config.zru_gyro_threshold;
-    if(!attitude->zru_enabled || threshold <= 0.0f || !attitude->acc_trusted) {
-        return false;
-    }
-
-    return fabsf(gyro->x) <= threshold &&
-        fabsf(gyro->y) <= threshold &&
-        fabsf(gyro->z) <= threshold;
-}
-
-static void imu_attitude_apply_zru(ImuAttitude* attitude, ImuGyro* gyro, float dt) {
-    if(attitude == 0 || gyro == 0 || dt <= 0.0f) {
-        return;
-    }
-
-    if(!imu_attitude_is_static_candidate(attitude, gyro)) {
-        attitude->zru_static_time_us = 0U;
-        attitude->zru_active = false;
-        return;
-    }
-
-    attitude->zru_static_time_us += (uint32_t)(dt * 1.0e6f);
-    if(attitude->zru_static_time_us < attitude->config.zru_min_static_us ||
-        attitude->config.zru_bias_gain <= 0.0f) {
-        attitude->zru_active = false;
-        return;
-    }
-
-    if(imu_attitude_z_bias_model_enabled(attitude)) {
-        attitude->gyro_z_temp_intercept += gyro->z * attitude->config.zru_bias_gain * dt;
-        attitude->gyro_z_bias_effective = attitude->gyro_z_temp_intercept;
-    }
-    else {
-        attitude->gyro_bias.z += gyro->z * attitude->config.zru_bias_gain * dt;
-        attitude->gyro_z_bias_effective = attitude->gyro_bias.z;
-    }
-    gyro->z = 0.0f;
-    attitude->zru_active = true;
-}
-
 static void imu_attitude_update_complementary(ImuAttitude* attitude, const ImuSample* sample, float dt) {
     ImuGyro gyro = { 0.0f, 0.0f, 0.0f };
     float roll_gyro = 0.0f;
@@ -625,7 +576,6 @@ static void imu_attitude_update_complementary(ImuAttitude* attitude, const ImuSa
     attitude->acc_trusted = imu_attitude_acc_can_fuse(attitude, sample, &acc_norm, &acc_age_us);
     attitude->last_acc_norm = acc_norm;
     attitude->last_acc_age_us = acc_age_us;
-    imu_attitude_apply_zru(attitude, &gyro, dt);
     attitude->gyro_filtered = gyro;
 
     roll_gyro = attitude->angle.roll + gyro.x * dt;
@@ -684,8 +634,6 @@ static void imu_attitude_update_mahony(ImuAttitude* attitude, const ImuSample* s
     attitude->acc_trusted = imu_attitude_acc_can_fuse(attitude, sample, &acc_norm, &acc_age_us);
     attitude->last_acc_norm = acc_norm;
     attitude->last_acc_age_us = acc_age_us;
-    imu_attitude_apply_zru(attitude, &gyro, dt);
-
     gx = gyro.x;
     gy = gyro.y;
     gz = gyro.z;
